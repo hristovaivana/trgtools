@@ -17,11 +17,11 @@ using namespace trgtools;
 int
 main(int argc, char* argv[])
 {
-  
+
   CLI::App app{"tpg_emulator"};
-  std::unique_ptr<AppHelper> ah;
+  AppHelper ah;
   AppHelper::Options opts{};
-  ah->parse_app(app, opts);
+  ah.parse_app(app, opts);
 
   try {
     app.parse(argc, argv);
@@ -30,18 +30,13 @@ main(int argc, char* argv[])
     return app.exit(e);
   }
 
-
-  if (opts.verbose) {
-    fmt::print("Files to process:\n");
-    for (const std::string& file : opts.input_files) {
-      fmt::print("- {}\n", file);
-    }
-  }
-
-  
+  ah.config_app(opts);
 
 
-  if (opts.verbose) fmt::print("Done! \n");
+
+  //if (opts.verbose) 
+  fmt::print("{:.<77}\n", "");
+  fmt::print("Done! \n");
 
   return 0;
 }
