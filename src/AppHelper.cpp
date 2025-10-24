@@ -8,22 +8,29 @@
 namespace dunedaq::trgtools
 {
 
-RootPlotter::RootPlotter() {	
-  h1_ch_r->GetYaxis()->SetCanExtend(TH1::kAllAxes);
-  h1_ch_s->GetYaxis()->SetCanExtend(TH1::kAllAxes);
+RootPlotter::RootPlotter() {
+  //gStyle->SetCanvasPreferGL(kTRUE);
+  gStyle->SetCanvasPreferGL();
+  gStyle->SetPalette(kDeepSea);
+  gStyle->SetPalette(kDarkRainbow);
 
-  h1_ch_r->SetCanExtend(TH1::kAllAxes); 
-  h1_ch_s->SetCanExtend(TH1::kAllAxes);
+  h1_tp->SetCanExtend(TH1::kAllAxes); 
+  //h1_tp->GetXaxis()->SetCanExtend(kTRUE);
+  //h1_tp->GetYaxis()->SetCanExtend(kTRUE);
 
-  h1_ch_r->GetYaxis()->SetCanExtend(kTRUE);
-  h1_ch_s->GetYaxis()->SetCanExtend(kTRUE);
-
+  h2_tp->SetCanExtend(TH2::kAllAxes);
 };
 
-void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const std::string& type ) {
+void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const std::string& type, bool pause) {
   // 3072 * 4 = 12284
   //int max_ch = 12284;
   //TH1F *h1_ch = new TH1F("h1_ch", "This is the channel distribution", max_ch, 0, max_ch);
+
+  // folder label
+  TString runnum = TString(std::to_string(m_current_runnum));
+  TString recnum = TString(std::to_string(m_current_recnum));
+  TString folder = TString(m_current_folder);
+
 
 
   // Create two histograms
@@ -32,7 +39,12 @@ void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& 
 
    // http server with port 8080, use jobname as top-folder name
    THttpServer *serv = new THttpServer("http:8081");
+   //THttpServer *serv = new THttpServer("http:8082");
    //if (!serv) serv = new THttpServer("http:8081");
+   
+   //serv->Hide("/Objects/");
+   //serv->Hide("/Objects");
+   //serv->SetTopName("ProtoDUNE2");
 
    // Fill histograms randomly
    TRandom3 random;
@@ -41,74 +53,264 @@ void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& 
     // Set a timer to call TimerFunction after a delay
     //gSystem->AddTimer(30000, Timer); // Stops after 5 seconds
 
-  TH1* h1_ch;
   TString c1_opt = "";
-  bool pause = false;
+  //bool pause = false;
+  //TH1* h1_ch_i = new TH1F(*h1_ch);
+  //TH1* h1_ts_i = new TH1F(*h1_ts);
+
+  std::vector<TString> titles = {
+    "Channel Number", "Start Time", "Samples Over Threshold", 
+    "Samples To Peak", "ADC Peak", "ADC Integral"
+  };
+  std::vector<TString> subs = {"_ch", "_ts", "_sot", "_peaks", "_peaka", "_sum"};
+  std::vector<TH1F*> h1s = {h1_ch, h1_tp, h1_tp, h1_tp, h1_tp, h1_tp};
+
+  std::vector<TH2D*> h2s = {h2_tp};
+  std::vector<TString> subs2 = {"_ch_vs_ts"};
+
+  fmt::print("DBG plot tps {}, {}, {}\n", runnum, recnum, folder);
+
+  for (auto& ss: subs) { ss = "_" + recnum + ss; }
+  for (auto& ss: subs2) { ss = "_" + recnum + ss; }
+
   if (type == "record") {
-    h1_ch_s->SetLineColor(kBlue);
-    h1_ch = h1_ch_r;
-  } else if (type == "slice") {
-    h1_ch_s->SetLineColor(kRed);
-    h1_ch = h1_ch_s;
-    c1_opt = "SAME";
-    pause = true;
+    mgrs[recnum].push_back(new TMultiGraph());
   }
 
+  //std::vector<TString> subs = {"_ts"};
+  //std::vector<TH1F*> h1s = {h1_ts};
+  int idx=0;
+  for (auto& h1 : h1s) {
+    //THStack& hsi = new THStack(*hs);
+    //hsi->SetName(hs->GetName()+subss[idx]);
+    //hss.push_back(hsi);
+
+    TH1* h1i = new TH1F(*h1);
+    if (type == "record") {
+      h1i->SetName(h1->GetName()+TString("_r")+subs[idx]);
+      h1i->SetTitle(titles[idx]);
+      h1i->SetLineColor(kBlack);
+      h1i->SetFillColorAlpha(kBlack, 0.35);
+      //h1i->SetFillColor(TColor::GetColor((Float_t) 0., 0., 1., 0.35));
+
+      //csts.push_back(new TCanvas("cst"+subs[idx], "stacked hists"));
+      //hss.push_back(new THStack("hs"+subs[idx], titles[idx]));
+      csts[recnum].push_back(new TCanvas("cst"+subs[idx], "stacked hists"));
+      hss[recnum].push_back(new THStack("hs"+subs[idx], titles[idx]));
+
+      //TCanvas* ctmp = new TCanvas("c1"+subs[idx], "Overlay Histograms");;
+      //crse.push_back(ctmp);
+      //crse[idx]->cd(); h1i->Draw(c1_opt); crse[idx]->Modified(); crse[idx]->Update();
+      //pause = true;
+    } else if (type == "slice") {
+      h1i->SetName(h1->GetName()+TString("_s")+subs[idx]);
+      h1i->SetTitle(titles[idx]);
+      h1i->SetLineColor(kRed);
+      h1i->SetFillColorAlpha(kRed, 0.35);
+      //h1i->SetFillColor(TColor::GetColor((Float_t) 1., 0., 0., 0.35));
+        //c1_opt = "SAME";
+        //pause = true;
+        //crse[idx]->cd(); h1i->Draw(c1_opt); crse[idx]->Modified(); crse[idx]->Update();
+    } else if (type == "tpgemu") {
+      h1i->SetName(h1->GetName()+TString("_e")+subs[idx]);
+      h1i->SetTitle(titles[idx]);
+      h1i->SetLineColor(kBlue);
+      h1i->SetFillColorAlpha(kBlue, 0.35);
+      //h1i->SetFillColor(TColor::GetColor((Float_t) 1., 0., 0., 0.35));
+        //c1_opt = "SAME";
+        //crse[idx]->cd(); h1i->Draw(c1_opt); crse[idx]->Modified(); crse[idx]->Update();
+        //pause = true;
+    } else if (type == "tpgnaive") {
+      h1i->SetName(h1->GetName()+TString("_n")+subs[idx]);
+      h1i->SetTitle(titles[idx]);
+      h1i->SetLineColor(kMagenta);
+      h1i->SetFillColorAlpha(kMagenta, 0.35);
+      //pause = true;
+    } else if (type == "tpgsim") {
+      h1i->SetName(h1->GetName()+TString("_m")+subs[idx]);
+      h1i->SetTitle(titles[idx]);
+      h1i->SetLineColor(kRed);
+      h1i->SetFillColorAlpha(kMagenta, 0.35);
+      //pause = true;
+    }
+
+
+    for (auto& tp: tp_buffer) {	
+      if (idx==0) h1i->Fill(tp.channel);
+      if (idx==1) h1i->Fill(tp.time_start);
+      if (idx==2) h1i->Fill(tp.samples_over_threshold);
+      if (idx==3) h1i->Fill(tp.samples_to_peak);
+      if (idx==4) h1i->Fill(tp.adc_peak);
+      if (idx==5) h1i->Fill(tp.adc_integral);
+    }
+    //hs->Add((TH1*)h1_ch->Clone());
+    serv->Register("/hists/"+TString(type), h1i);
+    //hss[idx]->Add(h1i);
+    hss[recnum][idx]->Add(h1i);
+    idx++;
+  }
+
+
+ 
+
+  idx=0;
+  //fmt::print("DBG multi graph size {}: \n", mgrs.size());
+  fmt::print("DBG multi graph size {}, {}: \n", mgrs.size(), mgrs[recnum].size());
+  //for (auto& mgr : mgrs) {
+  ///for (auto& mgr : mgrs[recnum]) {
+
+    //TH2* h2i = new TH2D(*h2);
+    TGraph* gr = new TGraph();
+    if (type == "record") {
+      gr->SetMarkerStyle(25);
+      gr->SetMarkerColor(kBlack);
+      gr->SetMarkerSize(0.85);
+      //cmgs.push_back(new TCanvas("cmg"+subs2[idx], "title"));
+      //mgrs[recnum].push_back(new TMultiGraph());
+      cmgs[recnum].push_back(new TCanvas("cmg"+subs2[idx], "title"));
+    } else if (type == "slice") {
+      gr->SetMarkerStyle(24);
+      gr->SetMarkerColor(kRed);
+      gr->SetMarkerSize(0.55);
+        //pause = true;
+    } else if (type == "tpgemu") {
+      gr->SetMarkerStyle(20);
+      gr->SetMarkerColor(kBlack);
+      gr->SetMarkerSize(0.10);
+      //pause = true;
+    } else if (type == "tpgnaive") {
+      gr->SetMarkerStyle(28);
+      gr->SetMarkerColor(kMagenta);
+      gr->SetMarkerSize(0.70);
+      //pause = true;
+    } else if (type == "tpgsim") {
+      gr->SetMarkerStyle(28);
+      gr->SetMarkerColor(kRed);
+      gr->SetMarkerSize(0.70);
+      //pause = true;
+    }
+
+    if (idx==0) { 
+      Int_t tpid = 0;
       for (auto& tp: tp_buffer) {
-	
-        h1_ch->Fill(tp.channel);
-      } 
-      //hs->Add((TH1*)h1_ch->Clone());
-      hs->Add(h1_ch);
+        uint64_t ts = tp.time_start + tp.samples_to_peak * 32;  	    
+	gr->SetPoint(tpid, ts, tp.channel);
+        tpid++;
+      }
+      mgrs[recnum][idx]->Add(gr);
+    }
+    //mgr->Add(gr);
+  //  idx++;
+  //}
+  fmt::print("DBG multi graph canvas {}, {}: \n", cmgs.size(), cmgs[recnum].size());
+
+  
 
 
-   gStopProcessing = false; 
-   fmt::print("DBG signal {} \n", gStopProcessing);
-   signal(SIGINT, signal_callback_handler);
-   // press Ctrl-C to stop macro
-  while (pause && !gSystem->ProcessEvents() && !gStopProcessing) {
-   //if (!gStopProcessing) {
-      random.Rannor(px,py);
-      hpx->Fill(px);
-      hpxpy->Fill(px,py);
+  if (pause) {
 
+  gStopProcessing = false; 
+  fmt::print("DBG signal {}     {}, {}, {}\n", gStopProcessing, runnum, recnum, folder);
+  signal(SIGINT, signal_callback_handler);
+  // press Ctrl-C to stop macro
+    c1->cd();
+    random.Rannor(px,py);
+    hpx->Fill(px);
+    hpxpy->Fill(px,py);
       
-      c1->cd();
-      h1_ch->Draw(c1_opt);
-      c1->Modified();
-      c1->Update();
-      
+    //c1->cd();
+    //h1_ch_i->Draw(c1_opt);
+    //c1->Modified();
+    //c1->Update();
+   
+    
+    idx=0;
+    //for (auto& cst : csts) {
+    for (auto& cst : csts[recnum]) {
       cst->cd();
-      cst->cd();
+      cst->SetSupportGL(true);
       gPad->SetGrid();
       //hs->Draw("nostack,e1p");
-      hs->Draw("");
+      //hss[idx]->Draw("nostack"); // custom colours 
+      hss[recnum][idx]->Draw("nostack"); // custom colours 
+      //hss[idx]->Draw("nostack PFC");
+      //hss[idx]->Draw("nostack PLC");
+      //hss[idx]->Draw("nostack PFC HIST");
+      //hss[idx]->Draw("nostack PLC HIST"); // palette colours
+      //hss[idx]->Draw("nostack HIST");
+      //hss[idx]->Draw("nostack AF"); // transparent
+      //hs->Draw("");
       cst->Modified();
       cst->Update();
+      if (pause == true) serv->Register("/canvases/"+runnum+"/"+folder, cst);
+      idx++;
+    }
+  
 
+   
+    idx=0;
+    //for (auto& cmg: cmgs) {
+    for (auto& cmg: cmgs[recnum]) {
+      cmg->cd();
+      cmg->SetSupportGL(true);
+      //mgrs[idx]->Draw("ap");
+      mgrs[recnum][idx]->Draw("ap");
+      cmg->Modified();
+      cmg->Update();
+      if (pause == true) serv->Register("/graphs/"+runnum+"/"+folder, cmg);
+      //idx++;
+    }
+
+
+
+    // test graphs
+    /* 
+    for (auto& gr : grs) {
+      c1->cd();
+      gr->Draw("ap");
+      c1->Modified();
+      c1->Update();
+    }
+    */
+
+    // test plot
       /*
       c1->cd();
       h1_ch->Draw(c1_opt);
       c1->Modified();
       c1->Update();
       */
-  }
+
+ 
   //c1->SaveAs("out.png");
-  
+  //cst->Print("c"+TString(cst->GetName())+".png");
+
+
+  TGraph* gr = new TGraph(10);
+  gr->SetName("gr1"); 
+  serv->Register("graphs/subfolder", gr);
+  //serv->Register("/graphs/subfolder", gr);
+  //serv->SetItemField("/Graphs/subfolder","_monitoring","100");
+  //serv->SetItemField("/Graphs/subfolder","_layout","simple");
+  //serv->SetItemField("/Graphs/subfolder","_drawitem","graph");
+  //serv->SetItemField("/Graphs/subfolder","_drawopt","AL");
 
 
    //serv->ProcessRequests();
    //serv->SetTimer(0, kTRUE);
 
-  //TGraph* gr = new TGraph(10);
-  //gr->SetName("gr1"); 
-  //auto serv = new THttpServer("http:8081");
-  //serv->Register("graphs/subfolder", gr);
- 
+
 
   //std::cout << "Press Enter to continue..." << std::endl;
   //std::cin.get();
 
+  //serv->Hide("/Objects/");
+  //serv->Unregister(c1);
+  } // pause 
+
+
+  while (pause && !gSystem->ProcessEvents() && !gStopProcessing) {
+  }
 
 }
 
@@ -116,6 +318,7 @@ void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& 
 AppHelper::AppHelper() {
 
   m_rp = new RootPlotter();
+  m_te = std::make_unique<TPGEmulator>();
 
 };
 //AppHelper::~AppHelper() {
@@ -161,23 +364,154 @@ std::string AppHelper::dts_to_datetime(uint64_t& ts, std::string s) {
 
 }
 
-//void AppHelper::get_tps(auto& fragments, TH1F *h1_ch, TString c1_opt) {
-void AppHelper::get_tps(auto& fragments) {
+trgdataformats::TriggerPrimitive AppHelper::convert_tp(auto& tp) {
+  //std::cout << "DBG TP type: "<<  typeid(tp).name() << " vs " << typeid(trgdataformats::TriggerPrimitive).name() << "\n";
+  TriggerPrimitive_v4 tp_v4 = std::any_cast<TriggerPrimitive_v4>(tp);
+  trgdataformats::TriggerPrimitive tp_v5;
+  tp_v5.channel = tp_v4.channel;
+  tp_v5.time_start = tp_v4.time_start;
+  tp_v5.samples_over_threshold = (tp_v4.time_over_threshold) / SAMPLE_TICK;
+  tp_v5.samples_to_peak = (tp_v4.time_peak - tp_v4.time_start) / SAMPLE_TICK;
+  tp_v5.adc_peak = tp_v4.adc_peak;
+  tp_v5.adc_integral = tp_v4.adc_integral;  
+  return tp_v5;
+}
+
+// trgdataformats::TriggerPrimitive
+template <typename T>
+void  AppHelper::get_tps(const std::vector<std::unique_ptr<dunedaq::daqdataformats::Fragment>>& fragments, const std::vector<uint64_t>& rw, const T& TriggerPrimitive) {
 
   //std::vector<trgdataformats::TriggerPrimitive> tp_buffer;	
 
   // can be reused for raw files too 
   int n_frags = 0;
   for (const auto& fragment : fragments) {
+    daqdataformats::SourceID sid = fragment->get_element_id();
+    if (std::find(m_valid_tp_sourceids.begin(), m_valid_tp_sourceids.end(), sid) == m_valid_tp_sourceids.end()) {
+      continue;
+    }
+
+    if (fragment->get_fragment_type() != daqdataformats::FragmentType::kTriggerPrimitive) {
+      continue;
+    } else {
+      //if (n_frags > 0) break; // TEMP test
+      BYTES_PER_TP = sizeof(T);
+
+      uint64_t begin = fragment->get_header().window_begin;
+      uint64_t end = fragment->get_header().window_end;
+      uint64_t eid = fragment->get_element_id().id;
+      auto seqnum = fragment->get_sequence_number();
+      fmt::print("DETAIL -- window/duration/id [ {} : {} ] / {} / {}, {} \n", begin, end, end-begin, eid, seqnum);
+      std::cout << dts_to_datetime(begin, std::string("(beg)."));
+      std::cout << dts_to_datetime(end, std::string("(end)."));
+      int num_tps = fragment->get_data_size() / BYTES_PER_TP;
+      if (num_tps == 0) continue;
+      fmt::print("DETAIL -- tp size {}\n", BYTES_PER_TP);
+      fmt::print("DETAIL -- tps {}\n", num_tps);
+
+      T* tp_array = static_cast<T*>(fragment->get_data());
+      for(size_t tpid(0); tpid<num_tps; ++tpid) {
+          auto& tp = tp_array[tpid];
+          //if v4 convert v4 to v5
+	  //if (typeid(tp) == typeid(TriggerPrimitive_v4)) {
+	  //  auto& tp_v5 = convert_tp(tp);
+	  //}
+
+      //for (int itp = 0; itp < num_tps; itp++) {
+      //  auto tp = reinterpret_cast<dunedaq::trgdataformats::TriggerPrimitive*>(
+      //    static_cast<char*>(fragment->get_data()) + itp * BYTES_PER_TP);
+
+	if (tpid < 10) {
+	    uint64_t ts = tp.time_start;  
+            int channel = (int)tp.channel;
+            int detid = (int)tp.detid;
+	    std::cout << "TP INFO " << channel << " (" << detid << ") " << dts_to_datetime(ts, "(ts).");
+        }
+     
+	
+	if (rw.size() > 0) {
+	  if (tp.time_start >= rw.at(0) && tp.time_start <= rw.at(1)) {
+	    uint64_t ts = tp.time_start;
+            //fmt::print("DETAIL -- FOUND TP in window {}\n", dts_to_datetime(ts, "(dbg)."));
+	    m_slice_tp_buffer_any.push_back(tp);
+            m_trigger_numbers.insert(fragment->get_trigger_number());
+	  }
+	} else {
+	  m_record_tp_buffer_any.push_back(tp);
+	}
+	
+      }
+    }
+    n_frags++;
+  }
+
+  if (m_record_tp_buffer_any.size() > 0) {
+    if ((m_record_tp_buffer_any.front()).type() == typeid(TriggerPrimitive_v4)) {
+
+    std::transform(m_record_tp_buffer_any.begin(), m_record_tp_buffer_any.end(), std::back_inserter(m_record_tp_buffer), [this](std::any val) { return this->convert_tp(val); });
+    } else {
+      std::transform(m_record_tp_buffer_any.begin(), m_record_tp_buffer_any.end(), std::back_inserter(m_record_tp_buffer), [](std::any val) { return std::any_cast<trgdataformats::TriggerPrimitive>(val); });
+    }
+    m_record_tp_buffer_any.clear();
+  }
+ 
+  if (m_slice_tp_buffer_any.size()) { 
+    if ((m_slice_tp_buffer_any.front()).type() == typeid(TriggerPrimitive_v4)) {
+
+    std::transform(m_slice_tp_buffer_any.begin(), m_slice_tp_buffer_any.end(), std::back_inserter(m_slice_tp_buffer), [this](std::any val) { return this->convert_tp(val); });
+    } else { 
+    std::transform(m_slice_tp_buffer_any.begin(), m_slice_tp_buffer_any.end(), std::back_inserter(m_slice_tp_buffer), [](std::any val) { return std::any_cast<trgdataformats::TriggerPrimitive>(val); });
+    }
+    m_slice_tp_buffer_any.clear();
+  }
+
+
+  fmt::print("DETAIL -- number of TP fragments {}\n", n_frags);
+  fmt::print("DETAIL -- TP record window {}\n", rw.size());
+  fmt::print("DETAIL -- TP sizee {}\n", BYTES_PER_TP);
+  fmt::print("DETAIL -- number of TPs found record {}\n", m_record_tp_buffer.size());
+  fmt::print("DETAIL -- number of TPs found slice {}\n", m_slice_tp_buffer.size());
+  fmt::print("DETAIL -- number of trn {}\n", m_trigger_numbers.size());
+  for(const auto& trn: m_trigger_numbers) {
+    fmt::print("DETAIL -- trigger number trn {}\n", trn);
+  }
+
+  fmt::print("DETAIL -- number of TPs found record ANY {}\n", m_record_tp_buffer_any.size());
+  fmt::print("DETAIL -- number of TPs found slice ANY {}\n", m_slice_tp_buffer_any.size());
+
+//std::vector<NewType> newVec; std::transform(oldVec.begin(), oldVec.end(), std::back_inserter(newVec), [](OldType val) { return static_cast<NewType>(val); });
+
+}
+
+void AppHelper::get_tps_wrapper(const std::vector<std::unique_ptr<dunedaq::daqdataformats::Fragment>>& fragments, const std::vector<uint64_t>& rw) {
+if (m_helper->m_opts.tp_format == "v4") {
+          TriggerPrimitive_v4 tp;
+          get_tps(fragments, rw, tp);
+        } else {
+          trgdataformats::TriggerPrimitive tp;
+          get_tps(fragments, rw, tp);
+        }
+}
+
+
+//void AppHelper::get_tps(auto& fragments, TH1F *h1_ch, TString c1_opt) {
+void AppHelper::get_tps_old(auto& fragments, const std::vector<uint64_t>& rw) {
+
+  //std::vector<trgdataformats::TriggerPrimitive> tp_buffer;	
+
+  // can be reused for raw files too 
+  int n_frags = 0;
+  std::set<uint64_t> trigger_numbers;
+  for (const auto& fragment : fragments) {
     if (fragment->get_fragment_type() != daqdataformats::FragmentType::kTriggerPrimitive) {
       continue;
     } else {
       if (n_frags > 0) break; // test
-      BYTES_PER_TP = sizeof(dunedaq::trgdataformats::TriggerPrimitive);
+      BYTES_PER_TP = sizeof(trgdataformats::TriggerPrimitive);
 
       uint64_t begin = fragment->get_header().window_begin;
       uint64_t end = fragment->get_header().window_end;
-      fmt::print("DETAIL -- window [ {} : {} ]\n", begin, end);
+      fmt::print("DETAIL -- window [ {} : {} ], {}\n", begin, end);
       int num_tps = fragment->get_data_size() / BYTES_PER_TP;
       if (num_tps == 0) continue;
       fmt::print("DETAIL -- tp size {}\n", BYTES_PER_TP);
@@ -191,17 +525,58 @@ void AppHelper::get_tps(auto& fragments) {
       //  auto tp = reinterpret_cast<dunedaq::trgdataformats::TriggerPrimitive*>(
       //    static_cast<char*>(fragment->get_data()) + itp * BYTES_PER_TP);
 
-	m_tp_buffer.push_back(tp);
 	if (tpid < 10) {
-	  uint64_t ts = tp.time_start;  
-          int channel = (int)tp.channel;
-	  std::cout << "TP INFO " << channel << ", " << dts_to_datetime(ts, "(ts).");
+	    uint64_t ts = tp.time_start;  
+            int channel = (int)tp.channel;
+	    std::cout << "TP INFO " << channel << ", " << dts_to_datetime(ts, "(ts).");
         }
+      
+	if (rw.size() > 0) {
+	  if (tp.time_start >= rw.at(1) && tp.time_start <= rw.at(2)) {
+	    uint64_t ts = tp.time_start;
+            fmt::print("DETAIL -- FOUND TP in window {}\n", dts_to_datetime(ts, "(dbg)."));
+	    m_slice_tp_buffer.push_back(tp);
+            trigger_numbers.insert(fragment->get_trigger_number());
+	  }
+	} else {
+	  m_record_tp_buffer.push_back(tp);
+	}
       }
     }
     n_frags++;
   }
   fmt::print("DETAIL -- number of TP fragments {}\n", n_frags);
+  fmt::print("DETAIL -- TP record window {}\n", rw.size());
+  fmt::print("DETAIL -- number of TPs found record {}\n", m_record_tp_buffer.size());
+  fmt::print("DETAIL -- number of TPs found slice {}\n", m_slice_tp_buffer.size());
+  fmt::print("DETAIL -- number of trn {}\n", trigger_numbers.size());
+  for(const auto& trn: trigger_numbers) {
+    fmt::print("DETAIL -- trigger number trn {}\n", trn);
+  }
+
+}
+
+void AppHelper::get_valid_tp_sourceids(auto& fragments, const std::string& type) {
+  
+  std::vector<daqdataformats::SourceID> ret;
+  for (const auto& fragment : fragments) {
+    if (fragment->get_fragment_type() != daqdataformats::FragmentType::kTriggerPrimitive) {
+      continue;
+    }
+
+    daqdataformats::SourceID sourceid = fragment->get_element_id();
+
+    if (type == "Timeslice") {
+      m_valid_tp_sourceids.push_back(sourceid);
+    }
+    ret.push_back(sourceid);
+  }
+  fmt::print("INFO {} sourceids: ", type);
+  for (auto& it: ret) {
+    //fmt::print("{}, {}, {}  ", it.id, it.subsystem, it.version);
+    fmt::print("{} ", it.id);
+  }
+  fmt::print("\n");
 }
 
 void AppHelper::get_valid_sourceids(auto& fragments) {
@@ -226,7 +601,6 @@ void AppHelper::get_valid_sourceids(auto& fragments) {
     fmt::print("{}  ", it.id);
   }
   fmt::print("\n");
-
 }
 void AppHelper::app_test_trts(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& input_file, bool a, bool v, bool vv) {
 
@@ -255,12 +629,19 @@ void AppHelper::app_test_trts(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& 
     auto tsh_ptr = input_file->get_tsh_ptr(first_rec);
     rec_first = (*tsh_ptr).timeslice_number;
     rec_last = (*(input_file->get_tsh_ptr(all_rh_paths.back()))).timeslice_number;
+    // gap - if needed
   }
 
   size_t num_records = (rec_last - rec_first)/rec_gap + 1;
   if (v) {
     fmt::print("Number of records {} vs {}: [ {} : {} ], gap: {}\n", num_records, all_rh_paths.size(), rec_first, rec_last, rec_gap);
   }
+  if (input_file->is_trigger_record_type()) {
+    m_num_records += num_records;
+  } else if (input_file->is_timeslice_type()) {
+    m_num_slices += num_records;
+  }
+
 
   if (a) {
     assert(num_records == all_rh_paths.size() && "checking number of records");
@@ -275,9 +656,14 @@ void AppHelper::parse_app(CLI::App& _app, Options& _opts)
     ->required()
     ->check(CLI::ExistingFile); // Validate that each file exists
 
+  _app.add_option("-j,--json-config", _opts.config_name, "TPGenerator config JSON to use (required)")
+    ->required()
+    ->check(CLI::ExistingFile);
+
+
   _app.add_option("-r,--input-records", _opts.input_records, "List of input trigger records to process");
   _app.add_option("-s,--input-slices", _opts.input_slices, "List of input time slices to process");
-  //_app.add_option("-b,--bytes-per-tp", _opts.bytes_per_tp, "Size of trigger primitive in bytes");
+  _app.add_option("-f,--tp-format", _opts.tp_format, "Trigger Primitive format: either v4 or v5. Default: v5");
 
   _app.add_option("-e, --helper", _opts.helper, "Select helper, e.g. 0, 1, ...");
   _app.add_option("--ee", _opts.helpers, "Select helpers, e.g. 0 1 ...");
@@ -310,7 +696,8 @@ void AppHelper::config_app(Options& _opts) {
   }
 
   for (const auto& input_file : m_input_files) {
-    app_test_trts(input_file, _opts.assert, _opts.verbose, _opts.verbose2);
+    // if -p --pedantic 
+    //app_test_trts(input_file, _opts.assert, _opts.verbose, _opts.verbose2);
     if (input_file->is_trigger_record_type()) {
       m_input_files_raw.push_back(input_file);
     } else if (input_file->is_timeslice_type()) {
@@ -319,6 +706,28 @@ void AppHelper::config_app(Options& _opts) {
       fmt::print("ERROR File has unknown record type.\n"); 
     }
   }
+
+
+  // sourceids
+  auto records = m_input_files_raw.front()->get_all_record_ids();
+  auto first_rec = *(records.begin());
+  daqdataformats::TriggerRecord record = m_input_files_raw.front()->get_trigger_record(first_rec);
+  auto& fragments = record.get_fragments_ref();
+  get_valid_tp_sourceids(fragments, "Trigger Record");
+
+  auto records_tp = m_input_files_tp.front()->get_all_record_ids();
+  auto first_rec_tp = *(records_tp.begin());
+  daqdataformats::TimeSlice timeslice = m_input_files_tp.front()->get_timeslice(first_rec_tp);
+  auto& fragments_tp = timeslice.get_fragments_ref();
+  get_valid_tp_sourceids(fragments_tp, "Timeslice");
+
+  // json 
+  // Get the configuration file
+  std::ifstream config_stream(_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  m_te->configure(config);
+  // Get the configuration file
+
 
   //helpers[0] = &AppHelper::helper_0;
 
@@ -380,9 +789,12 @@ void AppHelper::helper_1_2(auto& record, uint64_t& first_ts, uint64_t& last_ts, 
       fmt::print("INFO first timestamp: {}\n", first_ts); 
       fmt::print("INFO last timestamp: {}\n", last_ts); 
     }
-
-    std::vector<uint64_t> v = {record->get_header_ref().get_trigger_number(), first_ts, last_ts};
-    m_record_window.push_back(v);
+ 
+    std::vector<uint64_t> v2 = {first_ts, last_ts};
+    m_record_window_map.insert(std::make_pair(record->get_header_ref().get_trigger_number(), v2));
+    
+    //std::vector<uint64_t> v = {record->get_header_ref().get_trigger_number(), first_ts, last_ts};
+    //m_record_window.push_back(v);
 
     //uint64_t tt = record->get_header_ref().get_trigger_timestamp();
     //assert(tt >= first_ts && tt <= last_ts && "check record header timestamp");
@@ -398,11 +810,18 @@ void AppHelper::helper_0() {
   //for (auto& input_file: m_input_files) {
   for (auto& input_file: m_input_files_raw) {
 
+    m_trigger_numbers.clear();
+
     auto records = input_file->get_all_record_ids();
     fmt::print("INFO records: {}\n", records.size());
     fmt::print("INFO records to process: {}\n", m_helper->m_opts.input_records.size());
     for (const auto& record : records) {
+      //fmt::print("INFO record path {}\n", input_file->get_trigger_record_header_dataset_path(record));
+      //for (auto t: input_file->get_fragment_dataset_paths(record)) {
+      //  fmt::print("INFO record fragment path {}\n", t);
+      //}
 
+      m_record_tp_buffer.clear();
 
       if (m_helper->m_opts.input_records.size() > 0) { 	    
         if (std::find(m_helper->m_opts.input_records.begin(), m_helper->m_opts.input_records.end(), record.first) == m_helper->m_opts.input_records.end()) {
@@ -413,12 +832,27 @@ void AppHelper::helper_0() {
       if (m_helper->m_opts.verbose) fmt::print("DETAIL trigger record number {}\n", record.first);
 
       m_record_buffer.push_back(std::make_unique<daqdataformats::TriggerRecord>(input_file->get_trigger_record(record)));
+ 
+      std::cout << "TMP record first second " << record.first << ", " << record.second << "\n";
+      m_rp->m_current_recnum = record.first;
+      //m_rp->m_current_recnum = record.get_header_data().trigger_number;
+      //auto trh_ptr = input_file->get_trh_ptr(record);
+      //rec_second = trh_ptr->get_header().trigger_number;
 
 
       daqdataformats::TriggerRecord trigger_record = input_file->get_trigger_record(record);      
       auto& fragments = trigger_record.get_fragments_ref(); 
-      get_tps(fragments);
-      m_rp->plot_tps(m_tp_buffer, "record");
+      //get_tps_old(fragments, std::vector<uint64_t>{});
+      //trgdataformats::TriggerPrimitive tp;
+      //if (m_helper->m_opts.tp_format == "v4") {
+      //  TriggerPrimitive_v4 tp;
+      //  get_tps(fragments, std::vector<uint64_t>{}, tp);
+      //} else {
+      //  trgdataformats::TriggerPrimitive tp;
+      //  get_tps(fragments, std::vector<uint64_t>{}, tp);
+      //}
+      get_tps_wrapper(fragments, std::vector<uint64_t>{});
+      m_rp->plot_tps(m_record_tp_buffer, "record");
       if (m_helper->m_opts.verbose) { 
         fmt::print("DETAIL -- number of fragments {}\n", fragments.size());
 	//get_valid_sourceids(fragments);
@@ -473,13 +907,13 @@ void AppHelper::helper_1() {
 
 
 
-
 void AppHelper::helper_2() {
   // QUICK TIMESTAMP CHECK Don't check each fragment
   /* for each trigger record get
    * 1. start timestamp
    * 2. end timestamp
    * 3. check for missing timestamps
+   * for each trigger record find the matching timeslice(s)
    */
   if (m_helper->m_opts.verbose) fmt::print("DETAIL number of records {}\n", m_record_buffer.size());
   for (const auto& record : m_record_buffer) { 
@@ -496,16 +930,176 @@ void AppHelper::helper_2() {
 
   }
 
+  // step 1
+  fmt::print("DETAIL -- step1 tp files {}\n", m_input_files_tp.size());
+  auto rec_begin = m_record_window_map.begin();
+  for (auto& input_file: m_input_files_tp) { // assume time-pre-sorted 
+
+    auto records = input_file->get_all_record_ids();
+
+    daqdataformats::TimeSlice timeslice_first = input_file->get_timeslice(*(records.begin()));      
+    daqdataformats::TimeSlice timeslice_last = input_file->get_timeslice(*(records.rbegin()));      
+    uint64_t begin = timeslice_first.get_fragments_ref().front()->get_header().window_begin;
+    uint64_t end = timeslice_last.get_fragments_ref().back()->get_header().window_end;
+	   
+    for (auto it = rec_begin; it != m_record_window_map.end(); it++) {
+      if (rec_begin->second[0] >= begin && rec_begin->second[1] <= end) {
+        m_matched_files_tp.insert(input_file);
+        rec_begin = it;
+      }
+    }
+  }
+  m_input_files_tp.clear();
+  m_input_files_tp = std::vector<std::shared_ptr<hdf5libs::HDF5RawDataFile>>(m_matched_files_tp.begin(), m_matched_files_tp.end());
+  m_matched_files_tp.clear();
+  fmt::print("DETAIL -- step1 tp files {}\n", m_input_files_tp.size());
+
+
+  // step 2 
+  fmt::print("DETAIL -- records {}\n", m_record_window_map.size());
+  fmt::print("DETAIL -- num records {}\n", m_num_records);
+  fmt::print("DETAIL -- num slices {}\n", m_num_slices);
+  // resize by the found number of slices 
+  // or convert filename time string to epoch and compare to skip files  
+  for (auto& input_file: m_input_files_tp) { // assume time-pre-sorted 
+
+    auto records = input_file->get_all_record_ids();
+    for (const auto& record : records) {
+
+      daqdataformats::TimeSlice timeslice = input_file->get_timeslice(record);      
+      auto& fragments = timeslice.get_fragments_ref();
+      uint64_t begin = fragments.front()->get_header().window_begin;
+      uint64_t end = fragments.front()->get_header().window_end;
+	    
+      std::vector<uint64_t> v2 = {begin, end};
+      m_slice_window_map.insert(std::make_pair(record.first, v2));
+      m_slice_window_buffer.insert(std::make_pair(record, v2));
+    }
+
+  }
+
+  fmt::print("DETAIL -- slices {}\n", m_slice_window_map.size());
+  fmt::print("DETAIL -- input slices {}\n", m_input_slices.size());
+  if (m_input_slices.size() == 0) {
+  for (auto& [rec, win]: m_record_window_map) {
+
+    auto it_begin = m_slice_window_map.begin();
+    auto findWithin = std::find_if(it_begin, m_slice_window_map.end(), [&win](const std::pair<uint64_t, std::vector<uint64_t>>& pair) {
+      return win[0] >= pair.second[0] && win[1] <= pair.second[1];
+    });
+    if (findWithin != m_slice_window_map.end()) {
+      fmt::print("INFO within  record -- slice {} -- {}\n", rec, findWithin->first); 
+      m_input_slices.push_back(findWithin->first);
+      m_input_records_slices.push_back({rec, findWithin->first});
+      m_input_slices_records.insert({findWithin->first, rec});
+      it_begin = findWithin;
+    }
+
+    /*
+    auto findBegin = std::find_if(m_slice_window_map.begin(), m_slice_window_map.end(), [&win](const std::pair<uint64_t, std::vector<uint64_t>>& pair) {
+      return win[0] > pair.second[0] && win[0] < pair.second[1] && win[1] > pair.second[1];
+    });
+    if (findBegin != m_slice_window_map.end()) {
+      fmt::print("INFO begin  record -- slice {} -- {}\n", rec, findBegin->first); 
+      
+    }
+
+    auto findEnd = std::find_if(m_slice_window_map.begin(), m_slice_window_map.end(), [&win](const std::pair<uint64_t, std::vector<uint64_t>>& pair) {
+      return win[0] < pair.second[0] && win[1] > pair.second[0] && win[1] < pair.second[1];
+    });
+    if (findEnd != m_slice_window_map.end()) {
+      fmt::print("INFO end  record -- slice {} -- {}\n", rec, findEnd->first); 
+    }
+    */
+  }
+  }
+  fmt::print("DETAIL -- input slices {}\n", m_input_slices.size());
+  for (auto& it: m_input_slices) {
+    fmt::print("{} ", it);
+  }
+  fmt::print("\n");
+
+
+
+
 }
 
 
-
-
-
 void AppHelper::helper_3() {
+
+  for (auto& input_file: m_input_files_tp) {
+
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+    fmt::print("DETAIL -- current run {}, {}\n", m_rp->m_current_runnum, m_input_records_slices.size());
+
+    auto records = input_file->get_all_record_ids();
+    for (const auto& record : records) {
+
+      m_trigger_numbers.clear();
+      m_slice_tp_buffer.clear();
+
+      if (m_input_records_slices.size() == 0) return; // speedup but cannot process slices only -- check -r option 
+
+      if (m_helper->m_opts.input_slices.size() > 0) { 	    
+        if (std::find(m_helper->m_opts.input_slices.begin(), m_helper->m_opts.input_slices.end(), record.first) == m_helper->m_opts.input_slices.end()) {
+          continue;
+        }
+      } else {
+        if (!m_input_slices_records.contains(record.first)) continue;	
+      }
+
+      if (m_helper->m_opts.verbose) fmt::print("DETAIL timeslice/record pair {}/{}\n", record.first, m_input_slices_records[record.first]);
+
+
+ 
+      //m_slice_buffer.push_back(std::make_unique<daqdataformats::TimeSlice>(input_file->get_timeslice(record)));
+
+      daqdataformats::TimeSlice timeslice = input_file->get_timeslice(record);      
+
+      auto& fragments = timeslice.get_fragments_ref();
+      if (m_helper->m_opts.verbose) { 
+        fmt::print("DETAIL -- number of fragments {}\n", fragments.size());
+	//get_valid_sourceids(fragments);
+      }
+      m_rp->m_current_recnum = m_input_slices_records[record.first];
+      get_tps_wrapper(fragments, m_record_window_map[m_rp->m_current_recnum]);
+
+      //} else {
+        //std::vector<uint64_t> rw = {0, 0, std::numeric_limits<uint64_t>::max()};
+        //get_tps_wrapper(fragments, rw);	
+      //}
+
+    // capture slice number(s) that match the trigger record
+    // TODO make m_record_window sta::map<uint64_t, std::vecotr<uint64_t>>
+    //for(const auto& trn: trigger_numbers) {
+    //  m_record_window_map[m_rp->m_current_runnum].push_back(trn);
+    //}
+
+
+      fmt::print("DBG record windows {} ........................... \n", m_record_window_map.size());
+      std::string temp = std::to_string(m_rp->m_current_runnum);
+      temp += "_" + std::to_string(record.first);
+      m_rp->m_current_folder = temp;
+      fmt::print("DBG current folder, record {}, \n", temp, m_rp->m_current_recnum);
+     
+      if (m_trigger_numbers.size() > 0) {
+        fmt::print("DBG current folder plot ############################ \n");
+        m_rp->plot_tps(m_slice_tp_buffer, "slice");
+      }
+
+    } // record
+
+  } // file
+
+
+}
+
+
+void AppHelper::helper_3_old() {
   /* for each trigger record window get the corresponding timeslice window
    *
    */
+
 
   fmt::print("INFO trigger record: \n");
   fmt::print("INFO trigger record {}: \n", m_record_window.size());
@@ -516,15 +1110,31 @@ void AppHelper::helper_3() {
     std::cout << dts_to_datetime(i.at(2), std::string("(end)."));
 
   }
+  for (auto& [i, v2]: m_record_window_map) {
+    fmt::print("INFO trigger record MAP {}: [ {} : {} ]\n", i, v2.at(0), v2.at(1));
+
+    std::cout << dts_to_datetime(v2.at(0), std::string("(beg)."));
+    std::cout << dts_to_datetime(v2.at(1), std::string("(end)."));
+
+  }
+
 
   fmt::print("INFO timeslice {}: \n", m_input_files_tp.size());
 
   for (auto& input_file: m_input_files_tp) {
 
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+      fmt::print("DETAIL -- current run {}, {}\n", m_rp->m_current_runnum, m_record_window_map.size());
+
     auto records = input_file->get_all_record_ids();
     fmt::print("INFO slices: {}\n", records.size());
     fmt::print("INFO slices to process: {}\n", m_helper->m_opts.input_slices.size());
     for (const auto& record : records) {
+
+      m_trigger_numbers.clear();
+      m_slice_tp_buffer.clear();
+
+      if (m_record_window_map.size() == 0) return; // speedup but cannot process slices only -- check -r option 
 
       if (m_helper->m_opts.input_slices.size() > 0) { 	    
         if (std::find(m_helper->m_opts.input_slices.begin(), m_helper->m_opts.input_slices.end(), record.first) == m_helper->m_opts.input_slices.end()) {
@@ -534,22 +1144,458 @@ void AppHelper::helper_3() {
 
       if (m_helper->m_opts.verbose) fmt::print("DETAIL timeslice number {}\n", record.first);
 
-      m_slice_buffer.push_back(std::make_unique<daqdataformats::TimeSlice>(input_file->get_timeslice(record)));
+      //m_slice_buffer.push_back(std::make_unique<daqdataformats::TimeSlice>(input_file->get_timeslice(record)));
 
       daqdataformats::TimeSlice timeslice = input_file->get_timeslice(record);      
+
       auto& fragments = timeslice.get_fragments_ref();
       if (m_helper->m_opts.verbose) { 
         fmt::print("DETAIL -- number of fragments {}\n", fragments.size());
 	//get_valid_sourceids(fragments);
       }
-      get_tps(fragments);
-      m_rp->plot_tps(m_tp_buffer, "slice");
-    }
 
-  }
+
+      if (m_record_window_map.size() > 0) {
+
+      uint64_t begin = fragments.front()->get_header().window_begin;
+      uint64_t end = fragments.front()->get_header().window_end;
+       
+      for (auto& [i, rw]: m_record_window_map) {
+
+        //bool inWindow = (rw.at(0) > begin && rw.at(1) < end);
+        //if (!inWindow) continue;
+	
+        // before
+	if (end < rw.at(0)) continue; 
+	// past
+	if (begin > rw.at(1)) {
+	  m_record_window_map.erase(m_record_window_map.begin());
+	  //m_trigger_numbers.clear();
+	  break;
+	}
+	// should not be needed 
+        bool inWindow = ( (rw.at(0) > begin && rw.at(1) > end) || 
+	     (rw.at(0) < begin && rw.at(1) < end) || 
+	     (rw.at(0) > begin && rw.at(1) < end)
+	   );
+        if (!inWindow) continue;
+
+
+        m_rp->m_current_recnum = i;
+	//m_trigger_numbers.insert(i);
+        fmt::print("DETAIL -- current run rw {}, {}\n", i, rw.size());
+
+	//get_tps_old(fragments, rw);
+        //trgdataformats::TriggerPrimitive tp;
+        //TriggerPrimitive_v4 tp;
+        //get_tps(fragments, rw, tp);
+	//if (m_helper->m_opts.tp_format == "v4") {
+        //  TriggerPrimitive_v4 tp;
+        //  get_tps(fragments, rw, tp);
+        //} else {
+        //  trgdataformats::TriggerPrimitive tp;
+        //  get_tps(fragments, rw, tp);
+        //}
+	get_tps_wrapper(fragments, rw);
+
+      }
+      } else {
+        std::vector<uint64_t> rw = {0, 0, std::numeric_limits<uint64_t>::max()};
+        get_tps_wrapper(fragments, rw);	
+      }
+
+    // capture slice number(s) that match the trigger record
+    // TODO make m_record_window sta::map<uint64_t, std::vecotr<uint64_t>>
+    //for(const auto& trn: trigger_numbers) {
+    //  m_record_window_map[m_rp->m_current_runnum].push_back(trn);
+    //}
+
+
+    fmt::print("DBG record windows {} ........................... \n", m_record_window_map.size());
+    std::string temp = std::to_string(m_rp->m_current_runnum);
+    for (auto& it: m_trigger_numbers) {
+        temp += "_" + std::to_string(it);
+     }
+     m_rp->m_current_folder = temp;
+     fmt::print("DBG current folder, record {}, \n", temp, m_rp->m_current_recnum);
+     
+     if (m_trigger_numbers.size() > 0) {
+       fmt::print("DBG current folder plot ############################ \n");
+       m_rp->plot_tps(m_slice_tp_buffer, "slice");
+     }
+
+
+    } // record
+
+  } // file
 }
 
 
+
+void AppHelper::dummy(auto& fragment) {
+  std::unique_ptr<tpglibs::TPGenerator> tp_generator = m_te->get_tp_generator(fragment);
+
+
+  int16_t num_frames = fragment->get_data_size() / sizeof(dunedaq::fddetdataformats::WIBEthFrame);
+
+  std::cout << "DBG TPG NUM frames " << num_frames << "\n";
+  for (int16_t ifr = 0; ifr < num_frames; ifr++) {
+    //auto fp = reinterpret_cast<dunedaq::fdreadoutlibs::types::DUNEWIBEthTypeAdapter*>(
+    //          static_cast<char*>(frag_ptr->get_data()) + ifr * sizeof(dunedaq::fddetdataformats::WIBEthFrame));
+    auto fp = static_cast<fddetdataformats::WIBEthFrame*>(fragment->get_data() + ifr * sizeof(dunedaq::fddetdataformats::WIBEthFrame));
+
+
+    auto wfptr = reinterpret_cast<dunedaq::fddetdataformats::WIBEthFrame*>((uint8_t*)fp); // NOLINT
+
+    std::vector<trgdataformats::TriggerPrimitive> tps = (*tp_generator)(wfptr);
+
+    fmt::print("DETAIL number of tps {}\n", tps.size());
+
+  }
+
+}
+
+
+
+void AppHelper::helper_4() {
+  // emulated tps
+  /* for each trigger record get
+   * 1. vecotor of tps 
+   */
+  if (m_helper->m_opts.verbose) fmt::print("DETAIL number of records {}\n", m_record_buffer.size());
+  
+
+  for (const auto& record : m_record_buffer) {
+
+    std::vector<trgdataformats::TriggerPrimitive> output_buffer;
+    std::vector<trgdataformats::TriggerPrimitive> temp_buffer;
+
+    auto& fragments = record->get_fragments_ref();
+
+    for (const auto& fragment : fragments) {
+      if (fragment->get_data_size() == 0) {
+         continue;
+      }
+      if (fragment->get_fragment_type() != dunedaq::daqdataformats::FragmentType::kWIBEth) {
+        continue;
+      }
+      //dummy(fragment);
+      //temp_buffer = m_te->emulate_from(fragment);
+      //std::unique_ptr<tpglibs::TPGenerator> tp_generator = m_te->get_tp_generator(fragment);
+      //temp_buffer = m_te->emulate_from<tpglibs::TPGenerator>(std::move(tp_generator), std::move(fragment));
+      temp_buffer = m_te->emulate_from(fragment);  
+
+      if (temp_buffer.size() != 0) {
+        output_buffer.insert(output_buffer.end(), temp_buffer.begin(), temp_buffer.end());
+        temp_buffer.clear();
+      }
+    }
+
+    fmt::print("DETAIL number of tps {}\n", output_buffer.size());
+    int tpid = 0;
+    for (auto& tp : output_buffer) {
+      if (tpid < 10) {
+        uint64_t ts = tp.time_start;
+        int channel = (int)tp.channel;
+        std::cout << "TP INFO " << channel << ", " << dts_to_datetime(ts, "(ts).");
+        std::cout << "TP INFO " << tp.samples_over_threshold << ", " << tp.samples_to_peak << ", " << tp.adc_peak << ", " << tp.adc_integral << "\n";
+      }
+      tpid++;
+    }
+    m_rp->m_current_recnum = record->get_header_ref().get_trigger_number();;
+    m_rp->plot_tps(output_buffer, "tpgemu");
+
+    /*	  
+    const auto& fragments = record->get_fragments_ref();
+
+    for (const auto& fragment : fragments) {
+      if (fragment->get_fragment_type() != daqdataformats::FragmentType::kWIBEth) {
+        continue;
+      } else {
+
+        std::unique_ptr<tpglibs::TPGenerator> tp_generator = m_te->get_tp_generator(fragment);
+
+	m_te->set_tp_generator(tp_generator);
+
+	
+        fddetdataformats::WIBEthFrame* wib_array = static_cast<fddetdataformats::WIBEthFrame*>(fragment->get_data());
+
+        //std::vector<std::unique_ptr<fddetdataformats::WIBEthFrame*>> wib_buffer;
+	size_t num_wibs = fragment->get_data_size() / sizeof(fddetdataformats::WIBEthFrame);
+        //wib_buffer.reserve(num_wibs);
+        
+        for(size_t wid(0); wid<num_wibs; ++wid) {
+	  auto wfptr = reinterpret_cast<dunedaq::fddetdataformats::WIBEthFrame*>((uint8_t*)&wib_array[wid]); // NOLINT
+	  //std::unique_ptr<fddetdataformats::WIBEthFrame*> wib_ptr = std::make_unique<fddetdataformats::WIBEthFrame*>(&wib_array[wid]);
+          //wib_buffer.push_back(std::move(wib_ptr));
+	  //tps = 
+	  (*tp_generator)(wfptr);
+	}
+        //fmt::print("DETAIL number of wib frames {}\n", wib_buffer.size());
+	
+	//std::vector<trgdataformats::TriggerPrimitive> tps = te.emulate_vector(std::move(wib_buffer));
+	//std::vector<trgdataformats::TriggerPrimitive> tps = 
+	//m_te->emulate_vector(wib_buffer);
+        //fmt::print("DETAIL number of emulated tps {}\n", tps.size());
+
+        //wib_buffer.clear();
+    
+
+      }
+    }
+    */
+
+  } // record
+
+}
+
+
+void AppHelper::helper_5() {
+  // simulated tps
+  /* for each trigger record get
+   * 1. vecotor of tps 
+   */
+  if (m_helper->m_opts.verbose) fmt::print("DETAIL number of records {}\n", m_record_buffer.size());
+   
+  auto m_tpg_configs = m_te->get_configs();
+
+  //m_tpg_configs[0].first = "NaiveFrugalPedestalSubtractProcessor";
+  //m_tpg_configs[1].first = "NaiveThresholdProcessor";
+  //m_tpg_configs[0].first = "AVXFixedPedestalSubtractProcessor";
+  //m_tpg_configs[1].first = "AVXThresholdProcessor";
+  //m_te->set_configs(m_tpg_configs);
+
+  m_tpg_configs = m_te->get_configs();
+  for (auto& it : m_tpg_configs) {
+    std::cout << "DBG simulation json config: " << it.first << ", " << it.second << "\n";
+  }
+
+  for (const auto& record : m_record_buffer) {
+
+    std::vector<trgdataformats::TriggerPrimitive> output_buffer;
+    std::vector<trgdataformats::TriggerPrimitive> temp_buffer;
+
+    auto& fragments = record->get_fragments_ref();
+
+    int n_frags = 0;
+    for (const auto& fragment : fragments) {
+      //if (n_frags > 0) break; // TEMP test
+      if (fragment->get_data_size() == 0) {
+         continue;
+      }
+      if (fragment->get_fragment_type() != dunedaq::daqdataformats::FragmentType::kWIBEth) {
+        continue;
+      }
+      //temp_buffer = m_te->emulate_from(fragment);
+      //std::unique_ptr<tpglibs::NaiveTPGenerator> tp_generator = m_te->get_tp_generator_naive(fragment);
+      //temp_buffer = m_te->emulate_from<tpglibs::NaiveTPGenerator>(std::move(tp_generator), std::move(fragment));
+      temp_buffer = m_te->emulate_from_naive(fragment);
+
+      if (temp_buffer.size() != 0) {
+        output_buffer.insert(output_buffer.end(), temp_buffer.begin(), temp_buffer.end());
+        temp_buffer.clear();
+      }
+      n_frags++;
+    }
+
+    fmt::print("DETAIL number of tps {}\n", output_buffer.size());
+    int tpid = 0;
+    for (auto& tp : output_buffer) {
+      if (tpid < 10) {
+        uint64_t ts = tp.time_start;
+        int channel = (int)tp.channel;
+        std::cout << "TP INFO " << channel << ", " << dts_to_datetime(ts, "(ts).");
+        std::cout << "TP INFO " << tp.samples_over_threshold << ", " << tp.samples_to_peak << ", " << tp.adc_peak << ", " << tp.adc_integral << "\n";
+      }
+      tpid++;
+    }
+    m_rp->m_current_recnum = record->get_header_ref().get_trigger_number();;
+    m_rp->plot_tps(output_buffer, "tpgnaive");
+
+  } // record
+
+}
+
+void AppHelper::helper_6() {
+  using generator_t = tpglibs::NaiveTPGenerator;
+  std::unique_ptr<TPGEmulators<generator_t>> m_tes = std::make_unique<TPGEmulators<generator_t>>();
+
+  std::ifstream config_stream(m_helper->m_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  m_tes->configure(config);
+
+  std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> tps = m_tes->emulate_using(m_record_buffer);
+
+  int n_tps = 0;
+  for (auto [rid, tp_vec] : tps) {
+    m_rp->m_current_recnum = rid;
+    m_rp->plot_tps(tp_vec, "tpgnaive");
+    n_tps += tp_vec.size();
+  }
+  fmt::print("DBG found tps : {}, {}\n", tps.size(), n_tps);
+
+}
+
+void AppHelper::helper_7() {
+  using generator_t = tpglibs::TPGenerator;
+  std::unique_ptr<TPGEmulators<generator_t>> m_tes = std::make_unique<TPGEmulators<generator_t>>();
+
+  std::ifstream config_stream(m_helper->m_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  m_tes->configure(config);
+
+  std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> tps = m_tes->emulate_using(m_record_buffer);
+
+  int n_tps = 0;
+  for (auto [rid, tp_vec] : tps) {
+    m_rp->m_current_recnum = rid;
+    m_rp->plot_tps(tp_vec, "tpgemu");
+    n_tps += tp_vec.size();
+  }
+  fmt::print("DBG found tps : {}, {}\n", tps.size(), n_tps);
+
+}
+
+void AppHelper::helper_8() {
+  using generator_t = tpglibs::TPSimulator;
+  std::unique_ptr<TPGEmulators<generator_t>> m_tes = std::make_unique<TPGEmulators<generator_t>>();
+
+  std::ifstream config_stream(m_helper->m_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  m_tes->configure(config);
+
+  std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> tps = m_tes->emulate_using(m_record_buffer);
+
+  int n_tps = 0;
+  for (auto [rid, tp_vec] : tps) {
+    m_rp->m_current_recnum = rid;
+    n_tps += tp_vec.size();
+    fmt::print("DBG found tps : {}, {}\n", tps.size(), n_tps);
+    m_rp->plot_tps(tp_vec, "tpgsim");
+  }
+
+}
+
+
+
+
+
+
+void AppHelper::helper_9() {
+
+  //using generator_t = tpglibs::TPSimulator;
+  //std::unique_ptr<TPGEmulators<generator_t>> m_tes = std::make_unique<TPGEmulators<generator_t>>();
+  //std::map<std::string, std::any> g = {
+  //  {"AVX", tpglibs::TPGenerator}, 
+  //  {"Naive", tpglibs::NaiveTPGenerator}, 
+  //  {"Sim", tpglibs::TPSimulator}, 
+  //};
+
+  std::map<std::string, std::string> g = {
+    {"AVX", "tpgemu"}, 
+    {"Naive", "tpgnaive"}, 
+    {"Sim", "tpgsim"}, 
+  };
+
+
+
+  std::ifstream config_stream(m_helper->m_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  //m_tes->configure(config);
+
+  std::vector<std::string> tats = config["tpg_algorithm_types"];
+  fmt::print("Using number of algorithm types: {}, {}\n", tats.size(), tats[0]);
+
+  std::vector<bool> pause(tats.size(),false);
+  pause.back() = true;
+  
+
+
+  int n = 0;
+  for (auto tat : tats) {	
+    fmt::print("Using alg type: {}\n", tat);
+
+    nlohmann::json tpg_config_json = config["tpg_config"][0];
+    //std::vector<std::pair<std::string, nlohmann::json>> m_tpg_configs = tpg_config_json;
+    nlohmann::json new_config = config;
+    nlohmann::json j = new_config["tpg_config"][0];
+
+    //nlohmann::json tpg_config_json = config["tpg_config"][0];
+    //nlohmann::json m_tpg_configs = tpg_config_json;
+    //m_tpg_configs[0] = tat + tpg_config_json[0];
+    //m_tpg_configs[1] = tat + tpg_config_json[1];
+
+ 
+    for (auto& it : tpg_config_json.items()) {
+      //it.key() = tat;
+      //std::cout << it.key() << "\n";
+      //std::string key = tat + it.key();
+      //m_tpg_configs.push_back(std::make_pair(key, it.value()));
+      auto itr = j.find(it.key()); // try catch this, handle case when key is not found
+      std::string newKey = tat + it.key();
+      std::swap(j[newKey], itr.value());
+      j.erase(itr);
+    }
+    new_config["tpg_config"][0] = j;
+
+    /*
+    for (std::size_t n = 0; n < std::min( tpg_config_json.size(), m_tpg_configs.size() ); n++)
+    {
+      //auto  x = xs[ n ];
+      //auto& y = ys[ n ];
+      m_tpg_configs[n].first = tat + tpg_config_json[n].first;
+    }
+    */
+    
+    fmt::print("DETAIL config key \n");
+    for (auto& it : tpg_config_json.items()) {
+      std::cout << it.key() << "\n";
+    }
+    fmt::print("DETAIL final key \n");
+    for (auto& it : j.items()) {
+      std::cout << it.key() << "\n";
+    }
+
+    std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> tps;
+    if (tat == "AVX") {
+      tps = emulate_using<tpglibs::TPGenerator>(new_config, m_record_buffer);
+    }
+    if (tat == "Naive") {
+      tps = emulate_using<tpglibs::NaiveTPGenerator>(new_config, m_record_buffer);
+    }
+    if (tat == "Sim") {
+      tps = emulate_using<tpglibs::TPSimulator>(new_config, m_record_buffer);
+    }
+   
+
+    int n_tps = 0;
+    for (auto [rid, tp_vec] : tps) {
+      m_rp->m_current_recnum = rid;
+      n_tps += tp_vec.size();
+      fmt::print("DBG found tps : {}, {}, {}, {}\n", tat, tps.size(), n_tps, pause[n]);
+      m_rp->plot_tps(tp_vec, g[tat], pause[n]);
+    }
+
+    n++;
+  } 
+
+  //m_rp->pause = true;
+
+
+}
+
+
+
+
+
+
+// test 
+void AppHelper::helper_10() {
+ 
+  fmt::print("TP_v4 size {}\n", BYTES_PER_TP = sizeof(TriggerPrimitive_v4));
+
+
+}
 
 
 

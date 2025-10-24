@@ -20,7 +20,7 @@ find_package(trgdataformats REQUIRED)
 find_package(triggeralgs REQUIRED)
 find_package(fddetdataformats REQUIRED)
 find_package(detchannelmaps REQUIRED)
-
+find_package(tpglibs REQUIRED)
 
 daq_setup_environment()
 
@@ -34,7 +34,7 @@ find_package(ROOT 6.36 CONFIG REQUIRED)
 
 # See https://dune-daq-sw.readthedocs.io/en/latest/packages/daq-cmake/#daq_add_library
 
-daq_add_library(*.cpp LINK_LIBRARIES hdf5libs::hdf5libs trgdataformats::trgdataformats triggeralgs::triggeralgs detchannelmaps::detchannelmaps fddetdataformats::fddetdataformats CLI11::CLI11 fmt::fmt nlohmann_json::nlohmann_json ROOT::Core ROOT::RIO ROOT::ROOTDataFrame ROOT::RHTTP)
+daq_add_library(*.cpp LINK_LIBRARIES hdf5libs::hdf5libs trgdataformats::trgdataformats triggeralgs::triggeralgs detchannelmaps::detchannelmaps fddetdataformats::fddetdataformats tpglibs::tpglibs CLI11::CLI11 fmt::fmt nlohmann_json::nlohmann_json ROOT::Core ROOT::RIO ROOT::ROOTDataFrame ROOT::RHTTP)
 
 ##############################################################################
 
@@ -44,6 +44,13 @@ daq_add_library(*.cpp LINK_LIBRARIES hdf5libs::hdf5libs trgdataformats::trgdataf
 
 daq_add_python_bindings(*.cpp LINK_LIBRARIES ${PROJECT_NAME} ) # Any additional libraries to link in beyond the main library not yet determined
 
+##############################################################################
+# Extra options and tweaks
+set(TPGTOOLS_USE_INTRINSICS ON)
+
+if(${TPGTOOLS_USE_INTRINSICS})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
+endif()
 
 ##############################################################################
 
