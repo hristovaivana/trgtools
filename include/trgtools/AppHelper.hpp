@@ -59,8 +59,20 @@ volatile sig_atomic_t gStopProcessing = false;
 namespace dunedaq::trgtools
 {
 
+
+class AppHelper;
+
 //https://root.cern.ch/doc/master/classTGraphPainter.html#GP03
 class RootPlotter {
+
+  enum tpg_type {
+    RECORD = 0,
+    SLICE = 1,
+    TPGEMU = 2,
+    TPGNAIVE = 3,
+    TPGSIM = 4
+  };
+
   public:
     RootPlotter();
     ~RootPlotter() = default;
@@ -125,6 +137,17 @@ class RootPlotter {
     uint64_t m_current_recnum{0};
     std::string m_current_folder{""};
     void plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const std::string& type, bool pause=false);
+
+
+    std::vector<TString> m_tp_titles;
+    std::vector<TString> m_tp_subs;
+
+    std::unique_ptr<THttpServer> m_serv;
+    void book(dunedaq::trgtools::AppHelper* ah);
+    void fill_helper_2(TH1F* h1i, TH1F* h1, const tpg_type& type, const TString* info);
+    TGraph* fill_helper_1(const tpg_type& type);
+    void fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const tpg_type& type);
+    void show(dunedaq::trgtools::AppHelper* ah);
 };
 
 
@@ -147,7 +170,7 @@ class AppHelper
     ~AppHelper() = default;
     //~AppHelper();
 
-
+    friend class RootPlotter;
 
     /**
      * @brief Struct with available cli application options
@@ -158,8 +181,8 @@ class AppHelper
       std::vector<std::string> input_files;
       std::string config_name;
 
-      std::vector<int> input_records;
-      std::vector<int> input_slices;
+      std::vector<uint64_t> input_records;
+      std::vector<uint64_t> input_slices;
       std::string tp_format = "v5";
 
       int helper;
@@ -297,7 +320,8 @@ class AppHelper
     std::vector<std::any> m_slice_tp_buffer_any;
 
     // ROOT
-    RootPlotter* m_rp;
+    //RootPlotter* m_rp;
+    std::unique_ptr<RootPlotter> m_rp;
     std::unique_ptr<TPGEmulator> m_te;
 
     /*

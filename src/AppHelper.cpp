@@ -4,7 +4,6 @@
 #include "trgtools/AppHelper.hpp"
 
 
-
 namespace dunedaq::trgtools
 {
 
@@ -19,7 +18,210 @@ RootPlotter::RootPlotter() {
   //h1_tp->GetYaxis()->SetCanExtend(kTRUE);
 
   h2_tp->SetCanExtend(TH2::kAllAxes);
+
 };
+
+
+void RootPlotter::book(dunedaq::trgtools::AppHelper* ah) {
+  m_serv = std::make_unique<THttpServer>("http:8081");
+
+  m_tp_titles = {
+    "Channel Number", "Start Time", "Samples Over Threshold", 
+    "Samples To Peak", "ADC Peak", "ADC Integral"
+  };
+  m_tp_subs = {"_ch", "_ts", "_sot", "_peaks", "_peaka", "_sum"};
+  //std::vector<TH1F*> h1s = {h1_ch, h1_tp, h1_tp, h1_tp, h1_tp, h1_tp};
+
+  std::vector<TH2D*> h2s = {h2_tp, h2_tp, h2_tp};
+  std::vector<TString> subs2 = {"_ch_vs_ts", "_ch_vs_sum", "_sum_vs_ts"};
+
+  
+  fmt::print("DETAIL book {} \n", ah->m_input_records_slices.size());
+  for (const auto& it : ah->m_input_records_slices) {
+    fmt::print("DETAIL {}: {}, {} \n", it.size(), it[0], it[1]);
+
+    std::string runnum = std::to_string(m_current_runnum);
+    std::string recnum = std::to_string(it[0]);
+    std::string folder = runnum + "_" + std::to_string(it[0]) + "_" + std::to_string(it[1]);
+    fmt::print("DBG plot tps {}, {}, {}\n", runnum, recnum, folder);
+    for (auto& ss: m_tp_subs) { ss = "_" + recnum + ss; }
+    for (auto& ss: subs2) { ss = "_" + recnum + ss; }
+
+    for (size_t idx = 0; idx < h2s.size(); idx++) {
+      mgrs[recnum].push_back(new TMultiGraph());
+      cmgs[recnum].push_back(new TCanvas("cmg"+subs2[idx], "title"));
+    }
+
+    for (size_t idx = 0; idx < m_tp_subs.size(); idx++) {
+      csts[recnum].push_back(new TCanvas("cst"+m_tp_subs[idx], "stacked hists"));
+      hss[recnum].push_back(new THStack("hs"+m_tp_subs[idx], m_tp_titles[idx]));
+    }
+
+  }
+
+}
+
+void RootPlotter::fill_helper_2(TH1F* h1i, TH1F* h1, const tpg_type& type, const TString* info) {
+  switch(type) {
+  case RECORD:
+    h1i->SetName(h1->GetName()+TString("_r")+info[0]);
+    h1i->SetTitle(info[1]);
+    h1i->SetLineColor(kBlack);
+    h1i->SetFillColorAlpha(kBlack, 0.35);
+    break;
+  case SLICE:
+    h1i->SetName(h1->GetName()+TString("_s")+info[0]);
+    h1i->SetTitle(info[1]);
+    h1i->SetLineColor(kRed);
+    h1i->SetFillColorAlpha(kRed, 0.35);
+    break;
+  case TPGEMU:
+    h1i->SetName(h1->GetName()+TString("_e")+info[0]);
+    h1i->SetTitle(info[1]);
+    h1i->SetLineColor(kBlue);
+    h1i->SetFillColorAlpha(kBlue, 0.35);
+    break;
+  case TPGNAIVE:
+    h1i->SetName(h1->GetName()+TString("_n")+info[0]);
+    h1i->SetTitle(info[1]);
+    h1i->SetLineColor(kMagenta);
+    h1i->SetFillColorAlpha(kMagenta, 0.35);
+    break;
+  case TPGSIM:
+    h1i->SetName(h1->GetName()+TString("_m")+info[0]);
+    h1i->SetTitle(info[1]);
+    h1i->SetLineColor(kRed);
+    h1i->SetFillColorAlpha(kMagenta, 0.35);
+    break;
+  default: 
+    ;;
+  }
+
+
+  
+}
+TGraph* RootPlotter::fill_helper_1(const tpg_type& type) {
+  TGraph* gr = new TGraph();
+
+  switch(type) {
+  case RECORD:
+    gr->SetMarkerStyle(25);
+    gr->SetMarkerColor(kBlack);
+    gr->SetMarkerSize(0.85);
+    break;
+  case SLICE:
+    gr->SetMarkerStyle(24);
+    gr->SetMarkerColor(kRed);
+    gr->SetMarkerSize(0.55);
+    break;
+  case TPGEMU:
+    gr->SetMarkerStyle(20);
+    gr->SetMarkerColor(kBlack);
+    gr->SetMarkerSize(0.10);
+    break;
+  case TPGNAIVE:
+    gr->SetMarkerStyle(28);
+    gr->SetMarkerColor(kMagenta);
+    gr->SetMarkerSize(0.70);
+    break;
+  case TPGSIM:
+    gr->SetMarkerStyle(28);
+    gr->SetMarkerColor(kRed);
+    gr->SetMarkerSize(0.70);
+    break;  
+  default:
+    ;;
+  }
+  return gr;
+}
+void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const tpg_type& type) {
+ 
+  std::string recnum = std::to_string(m_current_recnum);
+
+  //TGraph* gr = new TGraph();
+  TGraph* gr0 = fill_helper_1(type);
+  TGraph* gr1 = fill_helper_1(type);
+  TGraph* gr2 = fill_helper_1(type);
+  Int_t tpid = 0;
+  for (auto& tp: tp_buffer) {
+    uint64_t ts = tp.time_start + tp.samples_to_peak * 32;  	    
+    gr0->SetPoint(tpid, ts, tp.channel);
+    gr1->SetPoint(tpid, tp.adc_integral, tp.channel);
+    gr2->SetPoint(tpid, ts, tp.adc_integral);
+    tpid++;
+  }
+  mgrs[recnum][0]->Add(gr0);
+  mgrs[recnum][1]->Add(gr1);
+  mgrs[recnum][2]->Add(gr2);
+
+
+  std::vector<TH1F*> h1s = {h1_ch, h1_tp, h1_tp, h1_tp, h1_tp, h1_tp};
+  std::vector<TH1F*> his;
+  for (size_t idx = 0; idx < csts[recnum].size(); idx++) {
+    TH1F* h1i = new TH1F(*h1s[idx]);
+    TString info[2] = {m_tp_subs[idx], m_tp_titles[idx]};
+    fill_helper_2(h1i, h1s[idx], type, info);
+    h1i->Print();
+    his.push_back(h1i);
+  }
+  for (auto& tp: tp_buffer) {
+    his[0]->Fill(tp.channel);
+    his[1]->Fill(tp.time_start);
+    his[2]->Fill(tp.samples_over_threshold);
+    his[3]->Fill(tp.samples_to_peak);
+    his[4]->Fill(tp.adc_peak);
+    his[5]->Fill(tp.adc_integral);
+  }
+  for (size_t idx = 0; idx < his.size(); idx++) {
+    hss[recnum][idx]->Add(his[idx]);
+    m_serv->Register("/hists/"+TString(std::to_string(type)), his[idx]);
+  }
+
+}
+
+void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
+  //THttpServer *serv = new THttpServer("http:8081");
+
+  for (const auto& it : ah->m_input_records_slices) {
+    fmt::print("DETAIL {}: {}, {} \n", it.size(), it[0], it[1]);
+
+    std::string runnum = std::to_string(m_current_runnum);
+    std::string recnum = std::to_string(it[0]);
+    TString folder = TString(runnum + "_" + std::to_string(it[0]) + "_" + std::to_string(it[1]));
+    //fmt::print("DBG plot tps {}, {}, {}\n", runnum, recnum, folder);
+    //for (auto& ss: subs) { ss = "_" + recnum + ss; }
+    //for (auto& ss: subs2) { ss = "_" + recnum + ss; }
+
+    int idx = 0;
+    for (auto& cmg: cmgs[recnum]) {
+      cmg->cd();
+      cmg->SetSupportGL(true);
+      mgrs[recnum][idx]->Draw("ap");
+      cmg->Modified();
+      cmg->Update();
+      m_serv->Register("/graphs/"+runnum+"/"+folder, cmg);
+      idx++;
+    }
+  
+    idx = 0;
+    for (auto& cst : csts[recnum]) {
+      cst->cd();
+      cst->SetSupportGL(true);
+      gPad->SetGrid();
+      hss[recnum][idx]->Draw("nostack"); // custom colours 
+      cst->Modified();
+      cst->Update();
+      m_serv->Register("/canvases/"+runnum+"/"+folder, cst);
+      idx++;
+    }
+  }
+
+  gStopProcessing = false; 
+  while (!gSystem->ProcessEvents() && !gStopProcessing) {
+  }
+
+}
+
 
 void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const std::string& type, bool pause) {
   // 3072 * 4 = 12284
@@ -317,8 +519,8 @@ void RootPlotter::plot_tps(const std::vector<trgdataformats::TriggerPrimitive>& 
 
 AppHelper::AppHelper() {
 
-  m_rp = new RootPlotter();
-  m_te = std::make_unique<TPGEmulator>();
+  //m_rp = new RootPlotter();
+  //m_te = std::make_unique<TPGEmulator>();
 
 };
 //AppHelper::~AppHelper() {
@@ -675,6 +877,13 @@ void AppHelper::parse_app(CLI::App& _app, Options& _opts)
 }  
 
 void AppHelper::config_app(Options& _opts) {
+ 
+  m_input_records = _opts.input_records;
+  m_input_slices = _opts.input_slices;
+
+  //m_rp = new RootPlotter();
+  m_rp = std::make_unique<RootPlotter>();
+  m_te = std::make_unique<TPGEmulator>();
 
   if (_opts.verbose) {
 
@@ -803,6 +1012,11 @@ void AppHelper::helper_1_2(auto& record, uint64_t& first_ts, uint64_t& last_ts, 
 // -------------------------------------------------------------------------
 void AppHelper::helper_0() {
 
+  for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+    m_input_records_slices.push_back({m_input_records[i], m_input_slices[i]});
+  } 
+  m_rp->book(this);
+
   //auto records = m_input_files.front()->get_all_record_ids();
   //std::vector<daqdataformats::TriggerRecord> record_buffer;
   //std::vector<std::unique_ptr<daqdataformats::TriggerRecord>> record_buffer;
@@ -834,7 +1048,6 @@ void AppHelper::helper_0() {
       m_record_buffer.push_back(std::make_unique<daqdataformats::TriggerRecord>(input_file->get_trigger_record(record)));
  
       std::cout << "TMP record first second " << record.first << ", " << record.second << "\n";
-      m_rp->m_current_recnum = record.first;
       //m_rp->m_current_recnum = record.get_header_data().trigger_number;
       //auto trh_ptr = input_file->get_trh_ptr(record);
       //rec_second = trh_ptr->get_header().trigger_number;
@@ -852,15 +1065,18 @@ void AppHelper::helper_0() {
       //  get_tps(fragments, std::vector<uint64_t>{}, tp);
       //}
       get_tps_wrapper(fragments, std::vector<uint64_t>{});
-      m_rp->plot_tps(m_record_tp_buffer, "record");
+      //m_rp->plot_tps(m_record_tp_buffer, "record");
+      m_rp->m_current_recnum = record.first;
+      m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::RECORD);
       if (m_helper->m_opts.verbose) { 
-        fmt::print("DETAIL -- number of fragments {}\n", fragments.size());
+        fmt::print("DETAIL -- number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());
 	//get_valid_sourceids(fragments);
       }
 
     }
 
   }
+
 
 
 }
@@ -977,6 +1193,8 @@ void AppHelper::helper_2() {
     }
 
   }
+
+  m_input_records_slices.clear();
 
   fmt::print("DETAIL -- slices {}\n", m_slice_window_map.size());
   fmt::print("DETAIL -- input slices {}\n", m_input_slices.size());
@@ -1496,6 +1714,12 @@ void AppHelper::helper_9() {
     {"Naive", "tpgnaive"}, 
     {"Sim", "tpgsim"}, 
   };
+  std::map<std::string, RootPlotter::tpg_type> type = {
+    {"AVX", RootPlotter::tpg_type::TPGEMU}, 
+    {"Naive", RootPlotter::tpg_type::TPGNAIVE}, 
+    {"Sim", RootPlotter::tpg_type::TPGSIM}, 
+  };
+
 
 
 
@@ -1508,9 +1732,8 @@ void AppHelper::helper_9() {
 
   std::vector<bool> pause(tats.size(),false);
   pause.back() = true;
-  
 
-
+ 
   int n = 0;
   for (auto tat : tats) {	
     fmt::print("Using alg type: {}\n", tat);
@@ -1570,17 +1793,19 @@ void AppHelper::helper_9() {
 
     int n_tps = 0;
     for (auto [rid, tp_vec] : tps) {
-      m_rp->m_current_recnum = rid;
       n_tps += tp_vec.size();
       fmt::print("DBG found tps : {}, {}, {}, {}\n", tat, tps.size(), n_tps, pause[n]);
-      m_rp->plot_tps(tp_vec, g[tat], pause[n]);
+      //m_rp->plot_tps(tp_vec, g[tat], pause[n]);
+
+      m_rp->m_current_recnum = rid;
+      m_rp->fill(tp_vec, type[tat]);
     }
 
     n++;
   } 
 
   //m_rp->pause = true;
-
+  m_rp->show(this);
 
 }
 
