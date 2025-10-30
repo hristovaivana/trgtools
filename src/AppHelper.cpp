@@ -23,7 +23,8 @@ RootPlotter::RootPlotter() {
 
 
 void RootPlotter::book(dunedaq::trgtools::AppHelper* ah) {
-  m_serv = std::make_unique<THttpServer>("http:8081");
+  TString port = TString(ah->m_helper->m_opts.port);
+  m_serv = std::make_unique<THttpServer>("http:"+port);
 
   m_tp_titles = {
     "Channel Number", "Start Time", "Samples Over Threshold", 
@@ -38,23 +39,27 @@ void RootPlotter::book(dunedaq::trgtools::AppHelper* ah) {
   
   fmt::print("DETAIL book {} \n", ah->m_input_records_slices.size());
   for (const auto& it : ah->m_input_records_slices) {
-    fmt::print("DETAIL {}: {}, {} \n", it.size(), it[0], it[1]);
+    fmt::print("DETAIL record/slice {}: {}, {} \n", it.size(), it[0], it[1]);
 
     std::string runnum = std::to_string(m_current_runnum);
     std::string recnum = std::to_string(it[0]);
     std::string folder = runnum + "_" + std::to_string(it[0]) + "_" + std::to_string(it[1]);
     fmt::print("DBG plot tps {}, {}, {}\n", runnum, recnum, folder);
-    for (auto& ss: m_tp_subs) { ss = "_" + recnum + ss; }
-    for (auto& ss: subs2) { ss = "_" + recnum + ss; }
+    std::vector<TString> current_subs;
+    std::vector<TString> current_subs2;
+    for (auto& ss: m_tp_subs) { current_subs.push_back("_" + recnum + ss); }
+    for (auto& ss: subs2) { current_subs2.push_back("_" + recnum + ss); }
 
     for (size_t idx = 0; idx < h2s.size(); idx++) {
+    fmt::print("DETAIL subs2 {}: {} \n", idx, current_subs2[idx]);
       mgrs[recnum].push_back(new TMultiGraph());
-      cmgs[recnum].push_back(new TCanvas("cmg"+subs2[idx], "title"));
+      cmgs[recnum].push_back(new TCanvas("cmg"+current_subs2[idx], "title"));
     }
 
     for (size_t idx = 0; idx < m_tp_subs.size(); idx++) {
-      csts[recnum].push_back(new TCanvas("cst"+m_tp_subs[idx], "stacked hists"));
-      hss[recnum].push_back(new THStack("hs"+m_tp_subs[idx], m_tp_titles[idx]));
+      fmt::print("DETAIL subs {}: {} \n", idx, current_subs[idx]);
+      csts[recnum].push_back(new TCanvas("cst"+current_subs[idx], "stacked hists"));
+      hss[recnum].push_back(new THStack("hs"+current_subs[idx], m_tp_titles[idx]));
     }
 
   }
@@ -162,6 +167,8 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
     TString info[2] = {m_tp_subs[idx], m_tp_titles[idx]};
     fill_helper_2(h1i, h1s[idx], type, info);
     h1i->Print();
+    h1s[idx]->Print();
+    fmt::print("DBG info {}, {}, {}, {}\n", info[0], info[1], recnum, csts[recnum][idx]->GetName());
     his.push_back(h1i);
   }
   for (auto& tp: tp_buffer) {
@@ -656,8 +663,9 @@ void  AppHelper::get_tps(const std::vector<std::unique_ptr<dunedaq::daqdataforma
     }
     m_record_tp_buffer_any.clear();
   }
- 
-  if (m_slice_tp_buffer_any.size()) { 
+
+  fmt::print("DETAIL -- slice tp buffer size {}\n", m_slice_tp_buffer_any.size());
+  if (m_slice_tp_buffer_any.size() > 0) { 
     if ((m_slice_tp_buffer_any.front()).type() == typeid(TriggerPrimitive_v4)) {
 
     std::transform(m_slice_tp_buffer_any.begin(), m_slice_tp_buffer_any.end(), std::back_inserter(m_slice_tp_buffer), [this](std::any val) { return this->convert_tp(val); });
@@ -674,7 +682,7 @@ void  AppHelper::get_tps(const std::vector<std::unique_ptr<dunedaq::daqdataforma
   fmt::print("DETAIL -- number of TPs found record {}\n", m_record_tp_buffer.size());
   fmt::print("DETAIL -- number of TPs found slice {}\n", m_slice_tp_buffer.size());
   fmt::print("DETAIL -- number of trn {}\n", m_trigger_numbers.size());
-  for(const auto& trn: m_trigger_numbers) {
+  for (const auto& trn: m_trigger_numbers) {
     fmt::print("DETAIL -- trigger number trn {}\n", trn);
   }
 
@@ -869,11 +877,11 @@ void AppHelper::parse_app(CLI::App& _app, Options& _opts)
 
   _app.add_option("-e, --helper", _opts.helper, "Select helper, e.g. 0, 1, ...");
   _app.add_option("--ee", _opts.helpers, "Select helpers, e.g. 0 1 ...");
+  _app.add_option("-p, --port", _opts.port, "Port number for THttpServer.");
 
   _app.add_flag("-a, --assert", _opts.assert, "Don't crash on assert failure.");
   _app.add_flag("-v, --verbose", _opts.verbose, "Don't print outputs.");
   _app.add_flag("--vv", _opts.verbose2, "Don't print more outputs.");
-
 }  
 
 void AppHelper::config_app(Options& _opts) {
@@ -1067,6 +1075,7 @@ void AppHelper::helper_0() {
       get_tps_wrapper(fragments, std::vector<uint64_t>{});
       //m_rp->plot_tps(m_record_tp_buffer, "record");
       m_rp->m_current_recnum = record.first;
+      fmt::print("DETAIL -- plot for record/tps {}/{}\n", record.first, m_record_tp_buffer.size());
       m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::RECORD);
       if (m_helper->m_opts.verbose) { 
         fmt::print("DETAIL -- number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());

@@ -191,6 +191,7 @@ class AppHelper
       bool assert = false;
       bool verbose = false;
       bool verbose2 = false;
+      std::string port = "8081";
 
       friend std::ostream& operator<<(std::ostream& os, const Options& o)
       {
@@ -201,9 +202,11 @@ class AppHelper
 	os << "-f, --tp-format: " << o.tp_format  << "\n";
 	os << "-e, --helper: " << o.helper  << "\n";
 	os << "-ee (helpers): "; for (auto& i : o.helpers)  os << i << ", "; os << "\n";
+	os << "-p, --port: " << o.port  << "\n";
         os << "-a, --assert: " << o.assert  << "\n"
 	   << "-v, --verbose: " << o.verbose  << "\n"
-	   << "-vv, --verbose2: " << o.verbose2  << "\n";
+	   << "-vv, --verbose2: " << o.verbose2  << "\n"
+	   ;
 
         return os;
       }
