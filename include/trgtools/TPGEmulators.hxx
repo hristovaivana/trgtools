@@ -74,6 +74,7 @@ std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> TPGEmulators<T
       }
     }
 
+    fmt::print("DBG found tps using {}, {}: \n", record->get_header_ref().get_trigger_number(), output_buffer.size());
     res.insert({record->get_header_ref().get_trigger_number(), output_buffer});
 
   }
@@ -82,7 +83,7 @@ std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> TPGEmulators<T
 }
 
 template <typename T>
-std::vector<trgdataformats::TriggerPrimitive>  TPGEmulators<T>::emulate_from(const std::unique_ptr<daqdataformats::Fragment>& fragment) {
+std::vector<trgdataformats::TriggerPrimitive> TPGEmulators<T>::emulate_from(const std::unique_ptr<daqdataformats::Fragment>& fragment) {
 
   // Create the output.
   std::vector<trgdataformats::TriggerPrimitive> output_buffer;

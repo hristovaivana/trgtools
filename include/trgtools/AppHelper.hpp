@@ -115,6 +115,9 @@ class RootPlotter {
 
     std::map<TString, std::vector<TCanvas*>> cmgs;
     std::map<TString, std::vector<TMultiGraph*>> mgrs;
+    std::map<TString, TString> m_canvas_titles;
+    std::vector<TString> m_2d_xtitles;
+    std::vector<TString> m_2d_ytitles;
 
     std::map<TString, std::vector<TCanvas*>> crse;
 
@@ -275,6 +278,7 @@ class AppHelper
 
 
     void helper_0();
+      void helper_0_1();
     void helper_1();
       void helper_1_0(const auto& fragment, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
       void helper_1_1(auto& fragments, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
