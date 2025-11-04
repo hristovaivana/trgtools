@@ -24,7 +24,9 @@ RootPlotter::RootPlotter() {
 
 void RootPlotter::book(dunedaq::trgtools::AppHelper* ah) {
   TString port = TString(ah->m_helper->m_opts.port);
-  m_serv = std::make_unique<THttpServer>("http:"+port);
+  //m_serv = std::make_unique<THttpServer>("http:"+port);
+
+
 
   m_tp_titles = {
     "Channel Number", "Start Time", "Samples Over Threshold", 
@@ -192,9 +194,13 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
     his[4]->Fill(tp.adc_peak);
     his[5]->Fill(tp.adc_integral);
   }
+  TString dir = "hists/"+TString(std::to_string(type))+"/"+recnum;
+  m_f->mkdir(dir);
+  m_f->cd(dir);
   for (size_t idx = 0; idx < his.size(); idx++) {
     hss[recnum][idx]->Add(his[idx]);
-    m_serv->Register("/hists/"+TString(std::to_string(type))+"/"+recnum, his[idx]);
+    //m_serv->Register("/hists/"+TString(std::to_string(type))+"/"+recnum, his[idx]);
+    his[idx]->Write();
   }
 
 }
@@ -202,7 +208,7 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
 void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
   //THttpServer *serv = new THttpServer("http:8081");
   //TString port = TString(ah->m_helper->m_opts.port);
-  //m_serv = std::make_unique<THttpServer>("http:"+port);
+  ////m_serv = std::make_unique<THttpServer>("http:"+port);
 
   fmt::print("DETAIL loop {} \n", ah->m_input_records_slices.size());
   for (const auto& it : ah->m_input_records_slices) {
@@ -215,6 +221,9 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
     //for (auto& ss: subs) { ss = "_" + recnum + ss; }
     //for (auto& ss: subs2) { ss = "_" + recnum + ss; }
 
+    TString dir = "graphs/"+runnum+"/"+folder;
+    m_f->mkdir(dir);
+    m_f->cd(dir);
     int idx = 0;
     for (auto& cmg: cmgs[recnum]) {
       cmg->cd();
@@ -225,11 +234,15 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
       mgrs[recnum][idx]->GetYaxis()->SetTitle(m_2d_ytitles[idx]);
       cmg->Modified();
       cmg->Update();
-      m_serv->Register("/graphs/"+runnum+"/"+folder, cmg);
+      cmg->Write();
+      //m_serv->Register("/graphs/"+runnum+"/"+folder, cmg);
       idx++;
     }
 
   
+    dir = "canvases/"+runnum+"/"+folder;
+    m_f->mkdir(dir);
+    m_f->cd(dir);
     idx = 0;
     for (auto& cst : csts[recnum]) {
       cst->cd();
@@ -241,15 +254,20 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
       hss[recnum][idx]->GetYaxis()->SetTitle("Number of Events");
       cst->Modified();
       cst->Update();
-      m_serv->Register("/canvases/"+runnum+"/"+folder, cst);
+      cst->Write();
+      //m_serv->Register("/canvases/"+runnum+"/"+folder, cst);
       idx++;
     }
 
   }
 
-  gStopProcessing = false; 
-  while (!gSystem->ProcessEvents() && !gStopProcessing) {
-  }
+  //m_serv
+  //gStopProcessing = false; 
+  //while (!gSystem->ProcessEvents() && !gStopProcessing) {
+  //}
+
+  m_f->Close();
+  delete m_f;
 
 }
 

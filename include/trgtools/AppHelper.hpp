@@ -151,6 +151,11 @@ class RootPlotter {
     TGraph* fill_helper_1(const tpg_type& type);
     void fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_buffer, const tpg_type& type);
     void show(dunedaq::trgtools::AppHelper* ah);
+
+
+    std::string histfile = "test.root";
+    TFile* m_f = new TFile(histfile.c_str(),"RECREATE");
+
 };
 
 
