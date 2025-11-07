@@ -68,7 +68,7 @@ class RootPlotter {
   enum tpg_type {
     RECORD = 0,
     SLICE = 1,
-    TPGEMU = 2,
+    TPGEMU = 2, // a.k.a AVX
     TPGNAIVE = 3,
     TPGSIM = 4
   };
@@ -253,6 +253,7 @@ class AppHelper
     std::vector<std::shared_ptr<hdf5libs::HDF5RawDataFile>> m_input_files_raw;
     std::vector<std::shared_ptr<hdf5libs::HDF5RawDataFile>> m_input_files_tp;
     std::set<std::shared_ptr<hdf5libs::HDF5RawDataFile>> m_matched_files_tp;
+    std::set<std::shared_ptr<hdf5libs::HDF5RawDataFile>> m_discard_files_tp;
     //std::vector<uint32_t> m_valid_tp_sourceids; 
     std::vector<daqdataformats::SourceID> m_valid_tp_sourceids; 
     std::vector<uint64_t> m_input_records;
@@ -280,10 +281,12 @@ class AppHelper
     void app_test_trts(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& input_file, bool a, bool v, bool vv);
     void app_test_trts_info(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& input_file);
 
-
-
+    void make_tpg_configs();
+    
+    void helper_0_test();
+      void helper_0_1_test();
     void helper_0();
-      void helper_0_1();
+      void helper_0_1(auto records, auto input_file);
     void helper_1();
       void helper_1_0(const auto& fragment, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
       void helper_1_1(auto& fragments, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
@@ -296,6 +299,7 @@ class AppHelper
     void helper_7();
     void helper_8();
     void helper_9();
+      void helper_9_tpgs();
     void helper_10();
     //#pragma GCC diagnostic push
     //#pragma GCC diagnostic ignored "-Wpedantic"
@@ -345,6 +349,8 @@ class AppHelper
     TH1F *h1_ch_r = new TH1F("h1_ch_r", "This is the channel distribution", max_ch, 0, max_ch);
     TH1F *h1_ch_s = new TH1F("h1_ch_s", "This is the channel distribution", max_ch, 0, max_ch);
     */
+
+    std::vector<nlohmann::json> m_tpg_configs;
 
     template <typename T>
     std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> emulate_using(const nlohmann::json& config, const std::vector<std::unique_ptr<daqdataformats::TriggerRecord>>& records) {

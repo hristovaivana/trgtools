@@ -23,10 +23,17 @@ RootPlotter::RootPlotter() {
 
 
 void RootPlotter::book(dunedaq::trgtools::AppHelper* ah) {
+
+  mgrs.clear();
+  cmgs.clear();
+  csts.clear();
+  hss.clear();
+  m_canvas_titles.clear();
+
+  
+      
   TString port = TString(ah->m_helper->m_opts.port);
   //m_serv = std::make_unique<THttpServer>("http:"+port);
-
-
 
   m_tp_titles = {
     "Channel Number", "Start Time", "Samples Over Threshold", 
@@ -266,8 +273,6 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
   //while (!gSystem->ProcessEvents() && !gStopProcessing) {
   //}
 
-  m_f->Close();
-  delete m_f;
 
 }
 
@@ -957,7 +962,7 @@ void AppHelper::config_app(Options& _opts) {
 
   for (const auto& input_file : m_input_files) {
     // if -c --pedantic 
-    app_test_trts(input_file, _opts.assert, _opts.verbose, _opts.verbose2);
+    //app_test_trts(input_file, _opts.assert, _opts.verbose, _opts.verbose2);
     if (input_file->is_trigger_record_type()) {
       m_input_files_raw.push_back(input_file);
     } else if (input_file->is_timeslice_type()) {
@@ -993,13 +998,59 @@ void AppHelper::config_app(Options& _opts) {
 
   //helper_0();
   m_helper = std::make_unique<Helper>(_opts);
+
+  make_tpg_configs();
+
   //(this->*helpers[_opts.helper])();
   for (const auto& h : _opts.helpers) {
     m_helper->start_message(h);
     (this->*helpers[h])();
   }
 }
+// -------------------------------------------------------------------------
+void AppHelper::make_tpg_configs() {
+  std::map<std::string, RootPlotter::tpg_type> type = {
+    {"AVX", RootPlotter::tpg_type::TPGEMU}, 
+    {"Naive", RootPlotter::tpg_type::TPGNAIVE}, 
+    {"Sim", RootPlotter::tpg_type::TPGSIM}, 
+  };
 
+  std::ifstream config_stream(m_helper->m_opts.config_name);
+  nlohmann::json config = nlohmann::json::parse(config_stream);
+  //m_tes->configure(config);
+
+  std::vector<std::string> tats = config["tpg_algorithm_types"];
+  fmt::print("Using number of algorithm types: {}, {}\n", tats.size(), tats[0]);
+
+  for (auto tat : tats) {	
+    fmt::print("Using alg type: {}\n", tat);
+
+    nlohmann::json tpg_config_json = config["tpg_config"][0];
+    //std::vector<std::pair<std::string, nlohmann::json>> m_tpg_configs = tpg_config_json;
+    nlohmann::json new_config = config;
+    nlohmann::json j = new_config["tpg_config"][0];
+
+    for (auto& it : tpg_config_json.items()) {
+      auto itr = j.find(it.key()); // try catch this, handle case when key is not found
+      std::string newKey = tat + it.key();
+      std::swap(j[newKey], itr.value());
+      j.erase(itr);
+    }
+    new_config["tpg_config"][0] = j;
+    m_tpg_configs.push_back(new_config);
+
+    fmt::print("DETAIL config key \n");
+    for (auto& it : tpg_config_json.items()) {
+      std::cout << it.key() << "\n";
+    }
+    fmt::print("DETAIL final key \n");
+    for (auto& it : j.items()) {
+      std::cout << it.key() << "\n";
+    }
+
+  }
+
+}
 // -------------------------------------------------------------------------
 void AppHelper::helper_1_0(const auto& fragment, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames) {
   assert(fragment->get_fragment_type() == daqdataformats::FragmentType::kWIBEth && "WIBEth fragment check");
@@ -1062,7 +1113,7 @@ void AppHelper::helper_1_2(auto& record, uint64_t& first_ts, uint64_t& last_ts, 
 
 }
 // -------------------------------------------------------------------------
-void AppHelper::helper_0_1() {
+void AppHelper::helper_0_1_test() {
   fmt::print("DBG get input records {} \n", -1);
   for (auto& input_file: m_input_files_raw) {
 
@@ -1078,7 +1129,7 @@ void AppHelper::helper_0_1() {
       //  fmt::print("INFO record fragment path {}\n", t);
       //}
 
-      m_record_tp_buffer.clear();
+      //m_record_tp_buffer.clear();
 
       if (m_helper->m_opts.input_records.size() > 0) { 	    
         if (std::find(m_helper->m_opts.input_records.begin(), m_helper->m_opts.input_records.end(), record.first) == m_helper->m_opts.input_records.end()) {
@@ -1100,11 +1151,12 @@ void AppHelper::helper_0_1() {
 
 }
 // -------------------------------------------------------------------------
-void AppHelper::helper_0() {
+void AppHelper::helper_0_test() {
+
 
   fmt::print("DBG input records/buffer {}/{} \n", m_input_records.size(), m_record_buffer.size());
   //if (m_input_records.size() == 0) {
-    helper_0_1();
+    helper_0_1_test();
     //return;
   //}
   fmt::print("DBG input records/buffer {}/{} \n", m_input_records.size(), m_record_buffer.size());
@@ -1212,6 +1264,112 @@ void AppHelper::helper_0() {
 
 }
 
+// -------------------------------------------------------------------------
+void AppHelper::helper_0_1(auto records, auto input_file) {
+    for (const auto& record : records) {
+      //fmt::print("INFO record path {}\n", input_file->get_trigger_record_header_dataset_path(record));
+      //for (auto t: input_file->get_fragment_dataset_paths(record)) {
+      //  fmt::print("INFO record fragment path {}\n", t);
+      //}
+
+      m_record_tp_buffer.clear();
+
+      if (m_helper->m_opts.input_records.size() > 0) { 	    
+        if (std::find(m_helper->m_opts.input_records.begin(), m_helper->m_opts.input_records.end(), record.first) == m_helper->m_opts.input_records.end()) {
+          continue;
+        }
+      }
+
+      if (m_helper->m_opts.verbose) fmt::print("DETAIL trigger record number {}\n", record.first);
+
+      m_record_buffer.push_back(std::make_unique<daqdataformats::TriggerRecord>(input_file->get_trigger_record(record)));
+
+      if (std::find(m_input_records.begin(), m_input_records.end(), record.first) == m_input_records.end()) {
+        m_input_records.push_back(record.first);
+      }
+
+    }
+
+}
+
+// -------------------------------------------------------------------------
+void AppHelper::helper_0() {
+  fmt::print("DBG get input records {} \n", -1);
+  for (auto& input_file: m_input_files_raw) {
+
+    m_trigger_numbers.clear();
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+
+    auto records = input_file->get_all_record_ids();
+    fmt::print("INFO records: {}\n", records.size());
+    fmt::print("INFO records to process: {}\n", m_helper->m_opts.input_records.size());
+ 
+    //m_input_records.clear();
+    //m_record_buffer.clear();
+    //m_input_slices.clear();
+    //m_input_records_slices.clear();
+
+  m_record_buffer.clear();
+  m_input_slices.clear();
+  m_input_records_slices.clear();
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  //if (m_input_records.size() == 0) {
+    helper_0_1(records, input_file);
+    //return;
+  //}
+  if (m_input_slices.size() == 0) {
+    m_input_records.clear();
+    helper_2();
+  } else {
+    for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+      m_input_records_slices.push_back({m_input_records[i], m_input_slices[i]});
+    }
+  }
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+    fmt::print("DBG record--slice {}--{} \n", m_input_records[i], m_input_slices[i]);
+  }
+  m_rp->book(this);
+
+  for(auto iter = m_record_buffer.begin(); iter != m_record_buffer.end(); ) {    
+    auto& record = *iter;
+    uint64_t n = record->get_header_ref().get_trigger_number();
+    if (std::find(std::begin(m_input_records), std::end(m_input_records), n) == std::end(m_input_records)) {
+      iter = m_record_buffer.erase(iter);
+      m_record_window_map.erase(n);
+    } else {
+      ++iter;
+    } 
+  }
+
+
+  fmt::print("DBG records--buffer--slices {}--{}--{} \n", m_input_records.size(), m_record_buffer.size(), m_input_slices.size()); 
+
+  for (auto& record : m_record_buffer) {
+
+    m_trigger_numbers.clear();
+
+      m_record_tp_buffer.clear();
+
+      uint64_t trigger_number = record->get_header_ref().get_trigger_number();
+
+      auto& fragments = record->get_fragments_ref(); 
+      get_tps_wrapper(fragments, std::vector<uint64_t>{});
+      m_rp->m_current_recnum = trigger_number;
+      fmt::print("DETAIL -- plot for record/tps/type {}/{}/{}\n", m_rp->m_current_recnum, m_record_tp_buffer.size(), RootPlotter::tpg_type::RECORD);
+      m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::RECORD);
+      if (m_helper->m_opts.verbose) { 
+        fmt::print("DETAIL -- number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());
+      }
+
+  }
+  helper_9_tpgs();
+
+  } // files
+
+}
+
+
 
 void AppHelper::helper_1() {
   // DETAILED TIMESTAMP CHECK - check each fragment separately 
@@ -1264,6 +1422,7 @@ void AppHelper::helper_2() {
    * for each trigger record find the matching timeslice(s)
    */
   if (m_helper->m_opts.verbose) fmt::print("DETAIL number of records {}\n", m_record_buffer.size());
+  m_record_window_map.clear();
   for (const auto& record : m_record_buffer) { 
     uint64_t first_ts;
     uint64_t last_ts;
@@ -1276,11 +1435,46 @@ void AppHelper::helper_2() {
     std::ranges::reverse_view rv{fragments};
     helper_1_1(rv, first_ts, last_ts, n_frames);
     helper_1_2(record, first_ts, last_ts, n_frames);
-
   }
+   
+  // step 0
+  fmt::print("DETAIL -- step0-0 tp files {}\n", m_input_files_tp.size());
+  auto found = m_input_files_tp.begin();
+  auto rec_begin = m_record_window_map.begin();
+  for(auto iter = m_input_files_tp.begin(); iter != m_input_files_tp.end(); ) {
+	
+    auto& input_file = *iter;
+    auto records = input_file->get_all_record_ids();
 
-  // step 1
-  fmt::print("DETAIL -- step1 tp files {}\n", m_input_files_tp.size());
+    daqdataformats::TimeSlice timeslice_first = input_file->get_timeslice(*(records.begin()));      
+    daqdataformats::TimeSlice timeslice_last = input_file->get_timeslice(*(records.rbegin()));      
+    uint64_t begin = timeslice_first.get_fragments_ref().front()->get_header().window_begin;
+    uint64_t end = timeslice_last.get_fragments_ref().back()->get_header().window_end;
+	   
+    fmt::print("DETAIL -- step0-LOOK {}: {}-{}: {} \n", rec_begin->first, rec_begin->second[0], end, rec_begin->second[0] - end);
+    if (rec_begin->second[0] > end) {
+      //m_discard_files_tp.insert(input_file);
+      //fmt::print("DETAIL -- step0-FOUND \n");
+      //continue;
+      iter = m_input_files_tp.erase(iter);
+    } else {
+      //++iter;
+      break;
+    }
+    //++iter;
+    //fmt::print("DETAIL -- step0-FOUND \n");
+    //found = iter;
+    //break;
+  }
+  //for(auto iter = m_input_files_tp.begin(); iter != found; ) {
+  //  iter = m_input_files_tp.erase(iter);
+  //}
+  fmt::print("DETAIL -- step0-1 tp files {}\n", m_input_files_tp.size());
+
+
+/*
+  m_discard_files_tp.clear();
+  fmt::print("DETAIL -- step0-0 tp files {}\n", m_input_files_tp.size());
   auto rec_begin = m_record_window_map.begin();
   for (auto& input_file: m_input_files_tp) { // assume time-pre-sorted 
 
@@ -1291,6 +1485,31 @@ void AppHelper::helper_2() {
     uint64_t begin = timeslice_first.get_fragments_ref().front()->get_header().window_begin;
     uint64_t end = timeslice_last.get_fragments_ref().back()->get_header().window_end;
 	   
+    if (rec_begin->second[0] > end) {
+      m_discard_files_tp.insert(input_file);
+    }
+  }
+  fmt::print("DETAIL -- step0-1 tp files {}\n", m_discard_files_tp.size());
+  m_input_files_tp.erase( remove_if( begin(m_input_files_tp),end(m_input_files_tp), [&](auto x){return find(begin(m_discard_files_tp),end(m_discard_files_tp),x)!=end(m_discard_files_tp);}), end(m_input_files_tp) );
+  fmt::print("DETAIL -- step0-2 tp files {}\n", m_input_files_tp.size());
+*/
+
+  // step 1
+  m_matched_files_tp.clear();
+  fmt::print("DETAIL -- step1 tp files {}\n", m_input_files_tp.size());
+  rec_begin = m_record_window_map.begin();
+  auto rec_end = m_record_window_map.rbegin();
+  for (auto& input_file: m_input_files_tp) { // assume time-pre-sorted 
+
+    auto records = input_file->get_all_record_ids();
+
+    daqdataformats::TimeSlice timeslice_first = input_file->get_timeslice(*(records.begin()));      
+    daqdataformats::TimeSlice timeslice_last = input_file->get_timeslice(*(records.rbegin()));      
+    uint64_t begin = timeslice_first.get_fragments_ref().front()->get_header().window_begin;
+    uint64_t end = timeslice_last.get_fragments_ref().back()->get_header().window_end;
+    
+    if (begin > rec_end->second[0]) break;     
+
     for (auto it = rec_begin; it != m_record_window_map.end(); it++) {
       if (rec_begin->second[0] >= begin && rec_begin->second[1] <= end) {
         m_matched_files_tp.insert(input_file);
@@ -1298,10 +1517,11 @@ void AppHelper::helper_2() {
       }
     }
   }
-  m_input_files_tp.clear();
-  m_input_files_tp = std::vector<std::shared_ptr<hdf5libs::HDF5RawDataFile>>(m_matched_files_tp.begin(), m_matched_files_tp.end());
-  m_matched_files_tp.clear();
-  fmt::print("DETAIL -- step1 tp files {}\n", m_input_files_tp.size());
+  //m_input_files_tp.clear();
+
+  //m_input_files_tp = std::vector<std::shared_ptr<hdf5libs::HDF5RawDataFile>>(m_matched_files_tp.begin(), m_matched_files_tp.end());
+  //m_matched_files_tp.clear();
+  fmt::print("DETAIL -- step1 tp files {}/{}\n", m_input_files_tp.size(), m_matched_files_tp.size());
 
 
   // step 2 
@@ -1310,7 +1530,8 @@ void AppHelper::helper_2() {
   fmt::print("DETAIL -- num slices {}\n", m_num_slices);
   // resize by the found number of slices 
   // or convert filename time string to epoch and compare to skip files  
-  for (auto& input_file: m_input_files_tp) { // assume time-pre-sorted 
+  m_slice_window_map.clear();
+  for (auto& input_file: m_matched_files_tp) { // assume time-pre-sorted 
 
     auto records = input_file->get_all_record_ids();
     for (const auto& record : records) {
@@ -1322,13 +1543,13 @@ void AppHelper::helper_2() {
 	    
       std::vector<uint64_t> v2 = {begin, end};
       m_slice_window_map.insert(std::make_pair(record.first, v2));
-      m_slice_window_buffer.insert(std::make_pair(record, v2));
+      //m_slice_window_buffer.insert(std::make_pair(record, v2));
     }
 
   }
 
-  m_input_records_slices.clear();
-  m_input_records.clear();
+  //m_input_records_slices.clear();
+  //m_input_records.clear();
 
   fmt::print("DETAIL -- slices {}\n", m_slice_window_map.size());
   fmt::print("DETAIL -- input slices {}\n", m_input_slices.size());
@@ -1849,98 +2070,26 @@ void AppHelper::helper_8() {
 }
 
 
+void AppHelper::helper_9_tpgs() {
 
-
-
-
-void AppHelper::helper_9() {
-
-  //using generator_t = tpglibs::TPSimulator;
-  //std::unique_ptr<TPGEmulators<generator_t>> m_tes = std::make_unique<TPGEmulators<generator_t>>();
-  //std::map<std::string, std::any> g = {
-  //  {"AVX", tpglibs::TPGenerator}, 
-  //  {"Naive", tpglibs::NaiveTPGenerator}, 
-  //  {"Sim", tpglibs::TPSimulator}, 
-  //};
-
-  std::map<std::string, std::string> g = {
-    {"AVX", "tpgemu"}, 
-    {"Naive", "tpgnaive"}, 
-    {"Sim", "tpgsim"}, 
-  };
-  std::map<std::string, RootPlotter::tpg_type> type = {
-    {"AVX", RootPlotter::tpg_type::TPGEMU}, 
-    {"Naive", RootPlotter::tpg_type::TPGNAIVE}, 
-    {"Sim", RootPlotter::tpg_type::TPGSIM}, 
+  std::vector<RootPlotter::tpg_type> tmp = {RootPlotter::tpg_type::RECORD, 
+	  RootPlotter::tpg_type::SLICE, 
+	  RootPlotter::tpg_type::TPGEMU, 
+	  RootPlotter::tpg_type::TPGNAIVE, 
+	  RootPlotter::tpg_type::TPGSIM
   };
 
-
-
-
-  std::ifstream config_stream(m_helper->m_opts.config_name);
-  nlohmann::json config = nlohmann::json::parse(config_stream);
-  //m_tes->configure(config);
-
-  std::vector<std::string> tats = config["tpg_algorithm_types"];
-  fmt::print("Using number of algorithm types: {}, {}\n", tats.size(), tats[0]);
-
-  std::vector<bool> pause(tats.size(),false);
-  pause.back() = true;
-
- 
-  int n = 0;
-  for (auto tat : tats) {	
-    fmt::print("Using alg type: {}\n", tat);
-
-    nlohmann::json tpg_config_json = config["tpg_config"][0];
-    //std::vector<std::pair<std::string, nlohmann::json>> m_tpg_configs = tpg_config_json;
-    nlohmann::json new_config = config;
-    nlohmann::json j = new_config["tpg_config"][0];
-
-    //nlohmann::json tpg_config_json = config["tpg_config"][0];
-    //nlohmann::json m_tpg_configs = tpg_config_json;
-    //m_tpg_configs[0] = tat + tpg_config_json[0];
-    //m_tpg_configs[1] = tat + tpg_config_json[1];
-
- 
-    for (auto& it : tpg_config_json.items()) {
-      //it.key() = tat;
-      //std::cout << it.key() << "\n";
-      //std::string key = tat + it.key();
-      //m_tpg_configs.push_back(std::make_pair(key, it.value()));
-      auto itr = j.find(it.key()); // try catch this, handle case when key is not found
-      std::string newKey = tat + it.key();
-      std::swap(j[newKey], itr.value());
-      j.erase(itr);
-    }
-    new_config["tpg_config"][0] = j;
-
-    /*
-    for (std::size_t n = 0; n < std::min( tpg_config_json.size(), m_tpg_configs.size() ); n++)
-    {
-      //auto  x = xs[ n ];
-      //auto& y = ys[ n ];
-      m_tpg_configs[n].first = tat + tpg_config_json[n].first;
-    }
-    */
-    
-    fmt::print("DETAIL config key \n");
-    for (auto& it : tpg_config_json.items()) {
-      std::cout << it.key() << "\n";
-    }
-    fmt::print("DETAIL final key \n");
-    for (auto& it : j.items()) {
-      std::cout << it.key() << "\n";
-    }
+  int idx = 2;
+  for (auto& new_config : m_tpg_configs) {
 
     std::map<uint64_t, std::vector<trgdataformats::TriggerPrimitive>> tps;
-    if (tat == "AVX") {
+    if (idx == 2) {
       tps = emulate_using<tpglibs::TPGenerator>(new_config, m_record_buffer);
     }
-    if (tat == "Naive") {
+    if (idx == 3) {
       tps = emulate_using<tpglibs::NaiveTPGenerator>(new_config, m_record_buffer);
     }
-    if (tat == "Sim") {
+    if (idx == 4) {
       tps = emulate_using<tpglibs::TPSimulator>(new_config, m_record_buffer);
     }
    
@@ -1948,20 +2097,21 @@ void AppHelper::helper_9() {
     int n_tps = 0;
     for (auto [rid, tp_vec] : tps) {
       n_tps += tp_vec.size();
-      fmt::print("DBG found tps : {}/{}: {}, {}, {}, {}\n", rid, tp_vec.size(), tat, tps.size(), n_tps, pause[n]);
-      //m_rp->plot_tps(tp_vec, g[tat], pause[n]);
+      fmt::print("DBG found tps : {}/{}: {}, {}, {}, \n", rid, tp_vec.size(), idx, tps.size(), n_tps);
 
       m_rp->m_current_recnum = rid;
-      m_rp->fill(tp_vec, type[tat]);
+      m_rp->fill(tp_vec, tmp[idx]);
     }
 
-    n++;
+    idx++;
   } 
-
-  //m_rp->pause = true;
   m_rp->show(this);
-
 }
+void AppHelper::helper_9() {
+  m_rp->m_f->Close();
+  delete m_rp->m_f;
+}
+
 
 
 
