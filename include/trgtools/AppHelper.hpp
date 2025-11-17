@@ -286,7 +286,7 @@ class AppHelper
     void app_test_trts(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& input_file, bool a, bool v, bool vv);
     void app_test_trts_info(const std::shared_ptr<hdf5libs::HDF5RawDataFile>& input_file);
 
-    void make_tpg_configs();
+    void make_tpg_configs(const std::string& config_name);
     
     void helper_0_test();
       void helper_0_1_test();

@@ -916,9 +916,9 @@ void AppHelper::parse_app(CLI::App& _app, Options& _opts)
     ->required()
     ->check(CLI::ExistingFile); // Validate that each file exists
 
-  _app.add_option("-j,--json-config", _opts.config_name, "TPGenerator config JSON to use (required)")
-    ->required()
-    ->check(CLI::ExistingFile);
+  _app.add_option("-j,--json-config", _opts.config_name, "TPGenerator config JSON to use (required)");
+    //->required()
+    //->check(CLI::ExistingFile);
 
 
   _app.add_option("--rr", _opts.conf_records, "Configure the trigger records processing");
@@ -978,33 +978,36 @@ void AppHelper::config_app(Options& _opts) {
   }
 
 
-  // sourceids
-  auto records = m_input_files_raw.front()->get_all_record_ids();
-  auto first_rec = *(records.begin());
-  daqdataformats::TriggerRecord record = m_input_files_raw.front()->get_trigger_record(first_rec);
-  auto& fragments = record.get_fragments_ref();
-  get_valid_tp_sourceids(fragments, "Trigger Record");
-
-  auto records_tp = m_input_files_tp.front()->get_all_record_ids();
-  auto first_rec_tp = *(records_tp.begin());
-  daqdataformats::TimeSlice timeslice = m_input_files_tp.front()->get_timeslice(first_rec_tp);
-  auto& fragments_tp = timeslice.get_fragments_ref();
-  get_valid_tp_sourceids(fragments_tp, "Timeslice");
-
-  // json 
-  // Get the configuration file
-  std::ifstream config_stream(_opts.config_name);
-  nlohmann::json config = nlohmann::json::parse(config_stream);
-  m_te->configure(config);
-  // Get the configuration file
-
+  if (m_input_files_raw.size() > 0) {
+    // sourceids
+    auto records = m_input_files_raw.front()->get_all_record_ids();
+    auto first_rec = *(records.begin());
+    daqdataformats::TriggerRecord record = m_input_files_raw.front()->get_trigger_record(first_rec);
+    auto& fragments = record.get_fragments_ref();
+    get_valid_tp_sourceids(fragments, "Trigger Record");
+    
+    // json 
+    // Get the configuration file
+    std::ifstream config_stream(_opts.config_name);
+    nlohmann::json config = nlohmann::json::parse(config_stream);
+    m_te->configure(config);
+    // Get the configuration file
+    assert(_opts.config_name != "" && "-j,--json-config is required \nRun with --help for more information.");
+    make_tpg_configs(_opts.config_name);
+  }
+  if (m_input_files_tp.size() > 0) {
+    auto records_tp = m_input_files_tp.front()->get_all_record_ids();
+    auto first_rec_tp = *(records_tp.begin());
+    daqdataformats::TimeSlice timeslice = m_input_files_tp.front()->get_timeslice(first_rec_tp);
+    auto& fragments_tp = timeslice.get_fragments_ref();
+    get_valid_tp_sourceids(fragments_tp, "Timeslice");
+  }
 
   //helpers[0] = &AppHelper::helper_0;
 
   //helper_0();
   m_helper = std::make_unique<Helper>(_opts);
 
-  make_tpg_configs();
 
   //(this->*helpers[_opts.helper])();
   for (const auto& h : _opts.helpers) {
@@ -1013,14 +1016,14 @@ void AppHelper::config_app(Options& _opts) {
   }
 }
 // -------------------------------------------------------------------------
-void AppHelper::make_tpg_configs() {
+void AppHelper::make_tpg_configs(const std::string& config_name) {
   std::map<std::string, RootPlotter::tpg_type> type = {
     {"AVX", RootPlotter::tpg_type::TPGEMU}, 
     {"Naive", RootPlotter::tpg_type::TPGNAIVE}, 
     {"Sim", RootPlotter::tpg_type::TPGSIM}, 
   };
 
-  std::ifstream config_stream(m_helper->m_opts.config_name);
+  std::ifstream config_stream(config_name);
   nlohmann::json config = nlohmann::json::parse(config_stream);
   //m_tes->configure(config);
 
