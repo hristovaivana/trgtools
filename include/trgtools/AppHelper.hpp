@@ -187,7 +187,10 @@ class AppHelper
     {
       /// @brief vector of input filenames
       std::vector<std::string> input_files;
-      std::string config_name;
+      std::string config_name = "";
+
+      int conf_records = -9;
+      int conf_slices = -9;
 
       std::vector<uint64_t> input_records;
       std::vector<uint64_t> input_slices;
@@ -205,6 +208,8 @@ class AppHelper
       {
 	os << "Job options:\n";
 	os << "-j, --json-config: " << o.config_name << "\n";
+	os << "--rr: " << o.conf_records << "\n";
+	os << "--ss: " << o.conf_slices << "\n";
 	os << "TriggerRecords: "; for (auto& i : o.input_records) os << i << ", "; os << "\n";
 	os << "TimeSlices: "; for (auto& i : o.input_slices)  os << i << ", "; os << "\n";
 	os << "-f, --tp-format: " << o.tp_format  << "\n";
@@ -256,8 +261,8 @@ class AppHelper
     std::set<std::shared_ptr<hdf5libs::HDF5RawDataFile>> m_discard_files_tp;
     //std::vector<uint32_t> m_valid_tp_sourceids; 
     std::vector<daqdataformats::SourceID> m_valid_tp_sourceids; 
-    std::vector<uint64_t> m_input_records;
-    std::vector<uint64_t> m_input_slices;
+    std::vector<uint64_t> m_input_records{0};
+    std::vector<uint64_t> m_input_slices{0};
       std::vector<std::vector<uint64_t>> m_input_records_slices; // no stitching
       std::map<uint64_t, uint64_t> m_input_slices_records; 
     int m_num_records{0};
@@ -286,13 +291,17 @@ class AppHelper
     void helper_0_test();
       void helper_0_1_test();
     void helper_0();
-      void helper_0_1(auto records, auto input_file);
+    void helper_0_no_r();
+    void helper_0_r_s();
+      void helper_0_0(auto records, auto input_file); // no -r
+      void helper_0_1(auto records, auto input_file); // with -r
     void helper_1();
       void helper_1_0(const auto& fragment, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
       void helper_1_1(auto& fragments, uint64_t& first_ts, uint64_t& last_ts, size_t& n_frames);
       void helper_1_2(auto& record, uint64_t& first_ts, uint64_t& last_ts, uint64_t& n_frames);
     void helper_2();
     void helper_3(); void helper_3_old();
+      void helper_3_slices();
     void helper_4();
     void helper_5();
     void helper_6();

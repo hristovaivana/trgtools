@@ -159,10 +159,11 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
   std::string recnum = std::to_string(m_current_recnum);
 
   //TGraph* gr = new TGraph();
-  TGraph* gr0 = fill_helper_1(type);
-  TGraph* gr1 = fill_helper_1(type);
-  TGraph* gr2 = fill_helper_1(type);
+  TGraph* gr0 = fill_helper_1(type); gr0->SetName("gr0");
+  TGraph* gr1 = fill_helper_1(type); gr1->SetName("gr1");
+  TGraph* gr2 = fill_helper_1(type); gr2->SetName("gr2");
   Int_t tpid = 0;
+  fmt::print("DBG TP info {}\n", tp_buffer.size());
   for (auto& tp: tp_buffer) {
     if (std::find(std::begin(bad_channels), std::end(bad_channels), tp.channel) != std::end(bad_channels)) {continue;}
     if (tp.samples_over_threshold > 256) continue;
@@ -172,9 +173,9 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
     gr2->SetPoint(tpid, ts, tp.adc_integral); 
     tpid++;
   }
-  mgrs[recnum][0]->Add(gr0);
-  mgrs[recnum][1]->Add(gr1);
-  mgrs[recnum][2]->Add(gr2);
+  mgrs[recnum][0]->Add(gr0); mgrs[recnum][0]->SetName("mg0");
+  mgrs[recnum][1]->Add(gr1); mgrs[recnum][0]->SetName("mg1");
+  mgrs[recnum][2]->Add(gr2); mgrs[recnum][0]->SetName("mg2");
   m_2d_ytitles = {"Channel Number", "Channel Number", "ADC Integral"};
   m_2d_xtitles = {"Timestamp", "ADC Integral", "Timestamp"};
 
@@ -207,9 +208,8 @@ void RootPlotter::fill(const std::vector<trgdataformats::TriggerPrimitive>& tp_b
   for (size_t idx = 0; idx < his.size(); idx++) {
     hss[recnum][idx]->Add(his[idx]);
     //m_serv->Register("/hists/"+TString(std::to_string(type))+"/"+recnum, his[idx]);
-    his[idx]->Write();
+    //his[idx]->Write();
   }
-
 }
 
 void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
@@ -243,6 +243,7 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
       cmg->Update();
       cmg->Write();
       //m_serv->Register("/graphs/"+runnum+"/"+folder, cmg);
+      delete mgrs[recnum][idx];
       idx++;
     }
 
@@ -263,6 +264,7 @@ void RootPlotter::show(dunedaq::trgtools::AppHelper* ah) {
       cst->Update();
       cst->Write();
       //m_serv->Register("/canvases/"+runnum+"/"+folder, cst);
+      delete hss[recnum][idx];
       idx++;
     }
 
@@ -919,6 +921,9 @@ void AppHelper::parse_app(CLI::App& _app, Options& _opts)
     ->check(CLI::ExistingFile);
 
 
+  _app.add_option("--rr", _opts.conf_records, "Configure the trigger records processing");
+  _app.add_option("--ss", _opts.conf_slices, "Configure the time slices processing");
+
   _app.add_option("-r,--input-records", _opts.input_records, "List of input trigger records to process");
   _app.add_option("-s,--input-slices", _opts.input_slices, "List of input time slices to process");
   _app.add_option("-f,--tp-format", _opts.tp_format, "Trigger Primitive format: either v4 or v5. Default: v5");
@@ -1265,7 +1270,7 @@ void AppHelper::helper_0_test() {
 }
 
 // -------------------------------------------------------------------------
-void AppHelper::helper_0_1(auto records, auto input_file) {
+void AppHelper::helper_0_0(auto records, auto input_file) {
     for (const auto& record : records) {
       //fmt::print("INFO record path {}\n", input_file->get_trigger_record_header_dataset_path(record));
       //for (auto t: input_file->get_fragment_dataset_paths(record)) {
@@ -1293,8 +1298,19 @@ void AppHelper::helper_0_1(auto records, auto input_file) {
 }
 
 // -------------------------------------------------------------------------
+// try all -r -s options
 void AppHelper::helper_0() {
-  fmt::print("DBG get input records {} \n", -1);
+  int conf_records = m_helper->m_opts.conf_records;
+  int conf_slices = m_helper->m_opts.conf_slices;
+  fmt::print("DBG conf records {} \n", conf_records);
+  fmt::print("DBG conf slices {} \n", conf_slices);
+
+  if (conf_records == 0 && conf_slices == -1) {
+
+    helper_3_slices();
+    return;	  
+  }
+
   for (auto& input_file: m_input_files_raw) {
 
     m_trigger_numbers.clear();
@@ -1314,7 +1330,7 @@ void AppHelper::helper_0() {
   m_input_records_slices.clear();
   fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
   //if (m_input_records.size() == 0) {
-    helper_0_1(records, input_file);
+    helper_0_0(records, input_file);
     //return;
   //}
   if (m_input_slices.size() == 0) {
@@ -1370,6 +1386,176 @@ void AppHelper::helper_0() {
 }
 
 
+// -------------------------------------------------------------------------
+// no -r option with list of records, default
+void AppHelper::helper_0_no_r() {
+  fmt::print("DBG get input records {} \n", -1);
+  for (auto& input_file: m_input_files_raw) {
+
+    m_trigger_numbers.clear();
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+
+    auto records = input_file->get_all_record_ids();
+    fmt::print("INFO records: {}\n", records.size());
+    fmt::print("INFO records to process: {}\n", m_helper->m_opts.input_records.size());
+ 
+    //m_input_records.clear();
+    //m_record_buffer.clear();
+    //m_input_slices.clear();
+    //m_input_records_slices.clear();
+
+  m_record_buffer.clear();
+  m_input_slices.clear();
+  m_input_records_slices.clear();
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  //if (m_input_records.size() == 0) {
+    helper_0_0(records, input_file);
+    //return;
+  //}
+  if (m_input_slices.size() == 0) {
+    m_input_records.clear();
+    helper_2();
+  } else {
+    for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+      m_input_records_slices.push_back({m_input_records[i], m_input_slices[i]});
+    }
+  }
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+    fmt::print("DBG record--slice {}--{} \n", m_input_records[i], m_input_slices[i]);
+  }
+  m_rp->book(this);
+
+  for(auto iter = m_record_buffer.begin(); iter != m_record_buffer.end(); ) {    
+    auto& record = *iter;
+    uint64_t n = record->get_header_ref().get_trigger_number();
+    if (std::find(std::begin(m_input_records), std::end(m_input_records), n) == std::end(m_input_records)) {
+      iter = m_record_buffer.erase(iter);
+      m_record_window_map.erase(n);
+    } else {
+      ++iter;
+    } 
+  }
+
+
+  fmt::print("DBG records--buffer--slices {}--{}--{} \n", m_input_records.size(), m_record_buffer.size(), m_input_slices.size()); 
+
+  for (auto& record : m_record_buffer) {
+
+    m_trigger_numbers.clear();
+
+      m_record_tp_buffer.clear();
+
+      uint64_t trigger_number = record->get_header_ref().get_trigger_number();
+
+      auto& fragments = record->get_fragments_ref(); 
+      get_tps_wrapper(fragments, std::vector<uint64_t>{});
+      m_rp->m_current_recnum = trigger_number;
+      fmt::print("DETAIL -- plot for record/tps/type {}/{}/{}\n", m_rp->m_current_recnum, m_record_tp_buffer.size(), RootPlotter::tpg_type::RECORD);
+      m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::RECORD);
+      if (m_helper->m_opts.verbose) { 
+        fmt::print("DETAIL -- number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());
+      }
+
+  }
+  helper_9_tpgs();
+
+  } // files
+
+}
+
+// -------------------------------------------------------------------------
+// -r and -s with list of matches, requires _no_r to run first 
+void AppHelper::helper_0_r_s() {
+  fmt::print("DBG get input records {} \n", -1);
+  size_t idx_beg = 0;
+  size_t idx_end = 0;
+  for (auto& input_file: m_input_files_raw) {
+
+    m_trigger_numbers.clear();
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+
+    auto records = input_file->get_all_record_ids();
+    fmt::print("INFO records: {}\n", records.size());
+    fmt::print("INFO records to process: {}\n", m_helper->m_opts.input_records.size());
+
+    m_record_buffer.clear();
+    for (const auto& record : records) {
+      m_record_buffer.push_back(std::make_unique<daqdataformats::TriggerRecord>(input_file->get_trigger_record(record)));
+      fmt::print("DETAIL -- added trigger number {}\n", record.first);
+    }
+
+    idx_end = idx_beg + records.size();
+
+    //m_input_records.clear();
+    //m_record_buffer.clear();
+    //m_input_slices.clear();
+    //m_input_records_slices.clear();
+
+/*
+  m_record_buffer.clear();
+  m_input_slices.clear();
+  m_input_records_slices.clear();
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  //if (m_input_records.size() == 0) {
+    helper_0_0(records, input_file);
+    //return;
+  //}
+  if (m_input_slices.size() == 0) {
+    m_input_records.clear();
+    helper_2();
+  } else {
+    for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+      m_input_records_slices.push_back({m_input_records[i], m_input_slices[i]});
+    }
+  }
+  */
+
+  m_input_records_slices.clear();
+  for (std::size_t i = idx_beg; i < idx_end; i++) {
+    m_input_records_slices.push_back({m_input_records[i], m_input_slices[i]});
+    fmt::print("DBG record--slice {}--{} for {}/{}:{} \n", m_input_records[i], m_input_slices[i], i, idx_beg, idx_end);
+  }
+
+  
+
+  fmt::print("DBG input records/buffer/win/slices {}/{}/{}/{} \n", m_input_records.size(), m_record_buffer.size(), m_record_window_map.size(), m_input_slices.size());
+  //for (std::size_t i = 0; i < std::min(m_input_records.size(), m_input_slices.size() ); i++) {
+  //  fmt::print("DBG record--slice {}--{} \n", m_input_records[i], m_input_slices[i]);
+  //}
+  //
+  m_rp->book(this);
+
+
+  fmt::print("DBG records--buffer--slices {}--{}--{} \n", m_input_records.size(), m_record_buffer.size(), m_input_slices.size()); 
+
+  for (const auto& record_buf : m_record_buffer) {
+
+    m_trigger_numbers.clear();
+
+      m_record_tp_buffer.clear();
+
+      uint64_t trigger_number = record_buf->get_header_ref().get_trigger_number();
+      fmt::print("DETAIL -- got trigger number {}\n", trigger_number);
+
+      auto& fragments = record_buf->get_fragments_ref(); 
+      get_tps_wrapper(fragments, std::vector<uint64_t>{});
+      m_rp->m_current_recnum = trigger_number;
+      fmt::print("DETAIL -- plot for record/tps/type {}/{}/{}\n", m_rp->m_current_recnum, m_record_tp_buffer.size(), RootPlotter::tpg_type::RECORD);
+      m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::RECORD);
+      if (m_helper->m_opts.verbose) { 
+        fmt::print("DETAIL -- number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());
+      }
+
+  }
+  helper_9_tpgs();
+
+  idx_beg = idx_end;
+  } // files
+
+}
+
+
 
 void AppHelper::helper_1() {
   // DETAILED TIMESTAMP CHECK - check each fragment separately 
@@ -1412,7 +1598,7 @@ void AppHelper::helper_1() {
 }
 
 
-
+// default: matched records and slices 
 void AppHelper::helper_2() {
   // QUICK TIMESTAMP CHECK Don't check each fragment
   /* for each trigger record get
@@ -1441,8 +1627,7 @@ void AppHelper::helper_2() {
   fmt::print("DETAIL -- step0-0 tp files {}\n", m_input_files_tp.size());
   auto found = m_input_files_tp.begin();
   auto rec_begin = m_record_window_map.begin();
-  for(auto iter = m_input_files_tp.begin(); iter != m_input_files_tp.end(); ) {
-	
+  for(auto iter = m_input_files_tp.begin(); iter != m_input_files_tp.end(); ) {	  
     auto& input_file = *iter;
     auto records = input_file->get_all_record_ids();
 
@@ -1676,8 +1861,86 @@ void AppHelper::helper_3() {
 
   } // file
 
+}
+
+void AppHelper::helper_3_slices() {
+
+
+  uint64_t subslice_window = 250000;
+  uint64_t subslice_start = 0; 
+  uint64_t subslice_end = 0; 
+  uint64_t subslice_idx = 0;
+  uint64_t slice_end = 0;
+
+  //for (auto& input_file: m_input_files_tp) {
+  for (auto& input_file_name : m_helper->m_opts.input_files) {
+    std::unique_ptr<hdf5libs::HDF5RawDataFile> input_file = std::make_unique<hdf5libs::HDF5RawDataFile>(input_file_name);
+
+  
+    m_rp->m_current_runnum = input_file->get_attribute<size_t>("run_number");
+    int file_index = input_file->get_attribute<size_t>("file_index"); 
+    std::string filename = std::to_string(m_rp->m_current_runnum) + "_" + std::to_string(file_index) + ".root";
+    m_rp->m_f = new TFile(filename.c_str(),"RECREATE");
+
+    fmt::print("DETAIL -- current run {}, {}\n", m_rp->m_current_runnum, m_input_records_slices.size());
+
+
+    auto records = input_file->get_all_record_ids();
+
+    for (const auto& record : records) {
+
+      m_trigger_numbers.clear();
+      m_slice_tp_buffer.clear();
+      m_record_tp_buffer.clear();
+
+
+      //subslice_start = record.get_fragments_ref().front()->get_header().window_begin;
+      //slice_end = record.get_fragments_ref().front()->get_header().window_end;
+      
+      //while (subslice_start < slice_end) {
+
+      //  subslice_end = subslice_start + subslice_window;
+
+      m_input_records_slices.clear();
+      m_input_records_slices.push_back({record.first, subslice_idx});
+      m_rp->book(this);
+
+      if (m_helper->m_opts.verbose) fmt::print("DETAIL timeslice/record pair {}/{}\n", record.first, m_input_slices_records[record.first]);
+
+
+      daqdataformats::TimeSlice timeslice = input_file->get_timeslice(record);      
+
+      auto& fragments = timeslice.get_fragments_ref();
+      if (m_helper->m_opts.verbose) { 
+        fmt::print("DETAIL -- number of fragments {}\n", fragments.size());
+	//get_valid_sourceids(fragments);
+      }
+
+      fmt::print("DBG record windows {} ........................... \n", m_record_window_map.size());
+
+      //m_rp->m_current_recnum = m_input_slices_records[record.first];
+      m_rp->m_current_recnum = record.first;
+      //get_tps_wrapper(fragments, m_record_window_map[m_rp->m_current_recnum]);
+      get_tps_wrapper(fragments, std::vector<uint64_t>{});
+      fmt::print("DETAIL -- TS plot for record/tps {}/{}/{}\n", m_rp->m_current_recnum, m_record_tp_buffer.size(), m_slice_tp_buffer.size());
+      //m_rp->fill(m_slice_tp_buffer, RootPlotter::tpg_type::SLICE);
+      m_rp->fill(m_record_tp_buffer, RootPlotter::tpg_type::SLICE);
+      if (m_helper->m_opts.verbose) {
+        fmt::print("DETAIL -- TS number of fragments/tps {}/{}\n", fragments.size(), m_record_tp_buffer.size());
+      }	
+
+
+      m_rp->show(this);
+    } // record
+
+    helper_9();
+
+  } // file
+
 
 }
+
+
 
 
 void AppHelper::helper_3_old() {
